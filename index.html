@@ -1,34 +1,93 @@
 <!DOCTYPE html>
-<html dir="ltr" lang="en">
+<html lang="ru">
 <head>
-    <meta charset="utf-8">
-    <title>Allure Report</title>
-    <link rel="icon" href="favicon.ico">
-    <link rel="stylesheet" type="text/css" href="styles.css">
-    <link rel="stylesheet" type="text/css" href="plugin/screen-diff/styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧪 Test Reports</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      max-width: 600px;
+      width: 100%;
+      padding: 2rem;
+    }
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 2rem;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    a.card {
+      display: block;
+      padding: 1.5rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      text-decoration: none;
+      color: #e2e8f0;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    a.card:hover {
+      border-color: #60a5fa;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(96, 165, 250, 0.2);
+    }
+    .card .emoji { font-size: 2rem; margin-bottom: 0.5rem; }
+    .card .name { font-size: 1.1rem; font-weight: 600; }
+    .card .desc { font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem; }
+    .footer {
+      text-align: center;
+      margin-top: 2rem;
+      color: #475569;
+      font-size: 0.8rem;
+    }
+  </style>
 </head>
 <body>
-    <div id="alert"></div>
-    <div id="content">
-        <span class="spinner">
-            <span class="spinner__circle"></span>
-        </span>
+  <div class="container">
+    <h1>🧪 Allure Test Reports</h1>
+    <div class="grid">
+      <a class="card" href="./dev/">
+        <div class="emoji">🟢</div>
+        <div class="name">DEV</div>
+        <div class="desc">Development</div>
+      </a>
+      <a class="card" href="./staging/">
+        <div class="emoji">🟡</div>
+        <div class="name">STAGING</div>
+        <div class="desc">Staging</div>
+      </a>
+      <a class="card" href="./preprod/">
+        <div class="emoji">??</div>
+        <div class="name">PREPROD</div>
+        <div class="desc">Pre-production</div>
+      </a>
+      <a class="card" href="./prod/">
+        <div class="emoji">🔴</div>
+        <div class="name">PROD</div>
+        <div class="desc">Production</div>
+      </a>
     </div>
-    <div id="popup"></div>
-    <script src="app.js"></script>
-    <script src="plugin/behaviors/index.js"></script>
-    <script src="plugin/packages/index.js"></script>
-    <script src="plugin/screen-diff/index.js"></script>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FVWC4GKEYS"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-FVWC4GKEYS', {
-          'allureVersion': '2.30.0',
-          'reportUuid': '8e914bb1-5605-4c5a-ad83-5c92012bd330',
-          'single_file': false
-        });
-    </script>
+    <div class="footer">
+      Выберите стенд для просмотра отчёта
+    </div>
+  </div>
 </body>
 </html>
