@@ -1,2 +1,0 @@
-
-🔗 Running tests against: https://hr-dev.acm-ai.ru/
