@@ -1,0 +1,12 @@
+[cleanup after-session] найдено 10 вакансий с префиксом 'AutoTest_'
+[cleanup after-session] удалена id=1522 'AutoTest_Дисплей_1819' → 204
+[cleanup after-session] удалена id=1521 'AutoTest_Дисплей_4750' → 204
+[cleanup after-session] удалена id=1520 'AutoTest_Дисплей_4702' → 204
+[cleanup after-session] удалена id=1519 'AutoTest_Дисплей_8887' → 204
+[cleanup after-session] удалена id=1518 'AutoTest_Дисплей_9635' → 204
+[cleanup after-session] удалена id=1517 'AutoTest_Дисплей_2738' → 204
+[cleanup after-session] удалена id=1516 'AutoTest_Дисплей_9773' → 204
+[cleanup after-session] удалена id=1515 'AutoTest_Дисплей_1857' → 204
+[cleanup after-session] удалена id=1514 'AutoTest_Дисплей_3228' → 204
+[cleanup after-session] удалена id=1513 'AutoTest_Дисплей_4261' → 204
+[cleanup after-session] итого: удалено 10, пропущено 0
