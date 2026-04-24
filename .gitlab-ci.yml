@@ -28,8 +28,33 @@ stages:
   - deploy
 
 variables:
-  TEST_ENV: dev
-  SCOPE: smoke
+  # ─── Prefilled variables для UI "Run pipeline" ────────────────────────
+  # Эти переменные показываются в форме Build → Pipelines → Run pipeline
+  # как выпадающие списки с description. В автоматических push-пайплайнах
+  # используется значение из `value:`.
+  TEST_ENV:
+    value: "dev"
+    description: "Тестовый стенд (из config/environments.py)."
+    options:
+      - "dev"
+      - "test"
+      - "prod"
+  SCOPE:
+    value: "smoke"
+    description: >-
+      Какой набор тестов запускать. smoke = smoke_critical + smoke;
+      all = всё (smoke + регресс); affected = smoke + тесты по git diff;
+      vacancy/modals/login/validation = точечный маркер.
+    options:
+      - "smoke"
+      - "all"
+      - "affected"
+      - "vacancy"
+      - "modals"
+      - "login"
+      - "validation"
+
+  # ─── Внутренние переменные (не показываются в UI) ─────────────────────
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
   PYTHONIOENCODING: "utf-8"
