@@ -195,7 +195,9 @@ single_marker:
 # ═══════════════════════════════════════════════════════════════════════════
 generate_report:
   stage: report
-  image: openjdk:17-slim
+  # openjdk:* deprecated и удалён с Docker Hub. Eclipse Temurin —
+  # официальный поддерживаемый преемник (Adoptium).
+  image: eclipse-temurin:17-jre-jammy
   when: always
   needs:
     - job: smoke_critical
