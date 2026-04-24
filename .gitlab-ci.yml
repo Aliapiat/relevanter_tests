@@ -37,8 +37,8 @@ variables:
     description: "Тестовый стенд (из config/environments.py)."
     options:
       - "dev"
-      - "qa"
-      - "stage"
+      - "staging"
+      - "preprod"
       - "prod"
   SCOPE:
     value: "smoke"

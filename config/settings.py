@@ -17,7 +17,7 @@ class Settings:
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
 
     # Обычный аккаунт рекрутёра — основной юзер для UI и API-тестов.
-    # Есть на всех стендах (dev/qa/stage/prod). Значения
+    # Есть на всех стендах (dev/staging/preprod/prod). Значения
     # нигде в коде не хардкодим: локально — из .env, в CI —
     # из secrets.RECRUITER_EMAIL / secrets.RECRUITER_PASSWORD.
     # См. README → «Secrets, которые нужно завести в репозитории».

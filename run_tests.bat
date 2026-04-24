@@ -6,7 +6,7 @@ REM  Run ALL autotests in one click.
 REM
 REM  Usage examples:
 REM    run_tests.bat                        - all tests on dev
-REM    run_tests.bat --env stage            - all tests on stage (alias: staging)
+REM    run_tests.bat --env staging          - all tests on staging
 REM    run_tests.bat -m smoke               - only smoke tests
 REM    run_tests.bat -m "login or vacancy"  - multiple markers
 REM    run_tests.bat -k test_login          - filter by name

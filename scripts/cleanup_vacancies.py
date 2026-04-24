@@ -12,8 +12,8 @@
     # удалить все вакансии, чьё название начинается с ALIQATEST
     python scripts/cleanup_vacancies.py --all
 
-    # то же на stage
-    python scripts/cleanup_vacancies.py --env stage --all
+    # то же на staging
+    python scripts/cleanup_vacancies.py --env staging --all
 
     # "сухой" прогон — только показать, что удалит
     python scripts/cleanup_vacancies.py --all --dry-run
