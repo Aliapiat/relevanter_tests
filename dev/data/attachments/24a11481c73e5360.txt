@@ -1,0 +1,3 @@
+[cleanup after-session] удалена id=1968 'ALIQATEST_SearchFilter_9243' → 204
+[cleanup after-session] удалена id=1969 'ALIQATEST_SearchFilter_9366' → 204
+[cleanup after-session] итого: удалено 2, пропущено по whitelist 0, чужих пропущено 0
