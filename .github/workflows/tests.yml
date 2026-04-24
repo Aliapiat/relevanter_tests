@@ -1,0 +1,423 @@
+name: 🧪 Tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Choose environment"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - all
+          - dev
+          - staging
+          - preprod
+          - prod
+      test_scope:
+        description: "Which tests to run"
+        required: true
+        default: smoke
+        type: choice
+        options:
+          # smoke_critical + smoke (~5 мин). Что гоняем на push-ах.
+          - smoke
+          # smoke + тесты, затронутые diff-ом коммита (по mapping'у
+          # из scripts/affected_tests.py). Быстрая проверка перед
+          # мерджем или ручным запуском.
+          - affected
+          # Полный прогон: smoke_critical → smoke → всё остальное.
+          - all
+          # Точечные маркеры — для локальной отладки CI.
+          - vacancy
+          - modals
+          - login
+          - validation
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  prepare:
+    name: 🎯 Prepare matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      scope: ${{ steps.set-scope.outputs.scope }}
+    steps:
+      - id: set-matrix
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo 'matrix=["dev"]' >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.environment }}" = "all" ]; then
+            echo 'matrix=["dev","staging","preprod","prod"]' >> $GITHUB_OUTPUT
+          else
+            echo 'matrix=["${{ inputs.environment }}"]' >> $GITHUB_OUTPUT
+          fi
+      - id: set-scope
+        # Контракт: для push-события (мердж в main) всегда «smoke»
+        # (быстрый фидбек). Явный выбор full — только через
+        # workflow_dispatch → scope=all. Это и есть двухуровневая
+        # стратегия из запроса: быстрый CI по умолчанию, полный —
+        # по кнопке.
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "scope=smoke" >> $GITHUB_OUTPUT
+          else
+            echo "scope=${{ inputs.test_scope }}" >> $GITHUB_OUTPUT
+          fi
+
+  test:
+    name: 🎭 Tests on ${{ matrix.env }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        env: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    env:
+      SCOPE: ${{ needs.prepare.outputs.scope }}
+      # Админ — используется ТОЛЬКО в tests/test_login.py
+      # (позитив/негатив входа, регистр, пробелы, XSS).
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      # Рекрутёр — используется во всех остальных тестах и в API
+      # cleanup (utils/api_client.py). Хардкода в коде нет, поэтому
+      # оба секрета ОБЯЗАТЕЛЬНЫ — без них упадёт уже первый тест,
+      # который создаёт вакансию. Инструкция, как завести секреты,
+      # лежит в README → «Secrets, которые нужно завести в репозитории».
+      RECRUITER_EMAIL: ${{ secrets.RECRUITER_EMAIL }}
+      RECRUITER_PASSWORD: ${{ secrets.RECRUITER_PASSWORD }}
+      HEADLESS: "true"
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        # fetch-depth=0 нужен, чтобы для scope=affected можно было
+        # взять git diff origin/main...HEAD без «shallow repository»
+        # ошибок.
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: 📦 Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      # ─────────────────────────────────────────────────────────
+      # Step 1: smoke_critical (fail-fast)
+      # Гоняется ВСЕГДА, кроме случая, когда пользователь явно
+      # выбрал узкий маркер (vacancy/modals/login/validation) для
+      # точечной отладки. Если падает — workflow останавливается
+      # на этом же шаге (exit 1 из-за `-x`), следующие шаги не
+      # выполняются. Это реализует «если критичный падает — даль-
+      # нейший прогон бессмысленен».
+      # ─────────────────────────────────────────────────────────
+      - name: 🔥 Smoke critical (fail-fast)
+        if: ${{ env.SCOPE == 'smoke' || env.SCOPE == 'affected' || env.SCOPE == 'all' }}
+        run: |
+          mkdir -p allure-results
+          pytest tests/ \
+            --env ${{ matrix.env }} \
+            --alluredir=allure-results \
+            -m smoke_critical \
+            -x \
+            -v
+
+      # ─────────────────────────────────────────────────────────
+      # Step 2: обычный smoke
+      # Запускается, если smoke_critical зелёный. Не останавли-
+      # вается на падениях — нам нужна полная картина смока в
+      # Allure-отчёте.
+      # ─────────────────────────────────────────────────────────
+      - name: 💨 Smoke
+        if: ${{ success() && (env.SCOPE == 'smoke' || env.SCOPE == 'affected' || env.SCOPE == 'all') }}
+        continue-on-error: true
+        run: |
+          pytest tests/ \
+            --env ${{ matrix.env }} \
+            --alluredir=allure-results \
+            -m "smoke and not smoke_critical" \
+            -v
+
+      # ─────────────────────────────────────────────────────────
+      # Step 3a: affected — только тесты, затронутые diff'ом.
+      # Для push в main используем HEAD~1..HEAD (что именно
+      # замерджили). Для workflow_dispatch сравниваем с origin/main.
+      # Если на выходе пусто — шаг тихо пропускается (смока уже
+      # достаточно).
+      # ─────────────────────────────────────────────────────────
+      - name: 🎯 Affected regression
+        if: ${{ success() && env.SCOPE == 'affected' }}
+        continue-on-error: true
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BASE="HEAD~1"
+          else
+            BASE="origin/main"
+          fi
+          echo "Base ref: $BASE"
+          CHANGED="$(git diff --name-only "$BASE"...HEAD || true)"
+          echo "Changed files:"
+          echo "$CHANGED"
+          TARGETS="$(echo "$CHANGED" | python scripts/affected_tests.py || true)"
+          if [ -z "$TARGETS" ]; then
+            echo "No affected tests resolved — smoke already covers the diff."
+            exit 0
+          fi
+          echo "Running affected: $TARGETS"
+          pytest $TARGETS \
+            --env ${{ matrix.env }} \
+            --alluredir=allure-results \
+            -v
+
+      # ─────────────────────────────────────────────────────────
+      # Step 3b: full regression (scope=all) — всё, что не smoke.
+      # Отдельный шаг, чтобы в Allure было видно границу между
+      # смоком и «длинным хвостом».
+      # ─────────────────────────────────────────────────────────
+      - name: 🧪 Full regression
+        if: ${{ success() && env.SCOPE == 'all' }}
+        continue-on-error: true
+        run: |
+          pytest tests/ \
+            --env ${{ matrix.env }} \
+            --alluredir=allure-results \
+            -m "not smoke and not smoke_critical" \
+            -v
+
+      # ─────────────────────────────────────────────────────────
+      # Step 3c: single marker (vacancy/modals/login/validation)
+      # для точечной отладки CI — ровно то же поведение, что было
+      # у старого MARKER_FLAG.
+      # ─────────────────────────────────────────────────────────
+      - name: 🔍 Single marker
+        if: ${{ env.SCOPE == 'vacancy' || env.SCOPE == 'modals' || env.SCOPE == 'login' || env.SCOPE == 'validation' }}
+        continue-on-error: true
+        run: |
+          mkdir -p allure-results
+          pytest tests/ \
+            --env ${{ matrix.env }} \
+            --alluredir=allure-results \
+            -m "$SCOPE" \
+            -v
+
+      - name: 🏷 Tag results with env name
+        if: always()
+        run: |
+          cd allure-results
+          python3 << 'EOF'
+          import json, glob
+          for f in glob.glob("*-result.json"):
+              with open(f, "r") as file:
+                  data = json.load(file)
+              labels = [l for l in data.get("labels", []) if l.get("name") != "parentSuite"]
+              labels.append({"name": "parentSuite", "value": "🖥 ${{ matrix.env }}"})
+              data["labels"] = labels
+              with open(f, "w") as file:
+                  json.dump(data, file)
+          print("Tagged all results with env: ${{ matrix.env }}")
+          EOF
+
+      - name: 📊 Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allure-results-${{ matrix.env }}
+          path: allure-results/
+          retention-days: 7
+
+
+  # ─────────────────────────────────────────────
+  # Отчёт: каждый стенд — отдельная страница
+  # ─────────────────────────────────────────────
+  report:
+    name: 📊 Report for ${{ matrix.env }}
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    if: always()
+
+    strategy:
+      fail-fast: false
+      matrix:
+        env: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      - name: 📥 Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results-${{ matrix.env }}
+          path: allure-results
+
+      - name: 📂 Verify results
+        run: |
+          echo "=== Files downloaded ==="
+          ls -la allure-results/
+          echo ""
+          echo "=== Result files ==="
+          ls allure-results/*-result.json 2>/dev/null | wc -l
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: 📊 Install Allure
+        run: |
+          wget -qO- https://github.com/allure-framework/allure2/releases/download/2.30.0/allure-2.30.0.tgz | tar xz
+          echo "$PWD/allure-2.30.0/bin" >> $GITHUB_PATH
+
+      - name: 📜 Keep history from previous runs
+        run: |
+          if [ -d "gh-pages/${{ matrix.env }}/history" ]; then
+            echo "Found previous history for ${{ matrix.env }}"
+            cp -r gh-pages/${{ matrix.env }}/history allure-results/history
+          else
+            echo "No previous history found for ${{ matrix.env }}"
+          fi
+
+      - name: 📊 Generate report
+        run: |
+          allure generate allure-results --clean -o allure-report
+
+      - name: 🚀 Deploy to Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-report
+          destination_dir: ${{ matrix.env }}
+          keep_files: true
+
+  # ─────────────────────────────────────────────
+  # Индексная страница со ссылками на все стенды
+  # ─────────────────────────────────────────────
+  index:
+    name: 🏠 Update index page
+    needs: report
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: 📝 Create index.html
+        run: |
+          mkdir -p public
+          cat > public/index.html << 'HTML'
+          <!DOCTYPE html>
+          <html lang="ru">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>🧪 Test Reports</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #0f172a;
+                color: #e2e8f0;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              }
+              .container {
+                max-width: 600px;
+                width: 100%;
+                padding: 2rem;
+              }
+              h1 {
+                text-align: center;
+                font-size: 2rem;
+                margin-bottom: 2rem;
+                background: linear-gradient(135deg, #60a5fa, #a78bfa);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+              }
+              .grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+              }
+              a.card {
+                display: block;
+                padding: 1.5rem;
+                background: #1e293b;
+                border: 1px solid #334155;
+                border-radius: 12px;
+                text-decoration: none;
+                color: #e2e8f0;
+                transition: all 0.2s;
+                text-align: center;
+              }
+              a.card:hover {
+                border-color: #60a5fa;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 20px rgba(96, 165, 250, 0.2);
+              }
+              .card .emoji { font-size: 2rem; margin-bottom: 0.5rem; }
+              .card .name { font-size: 1.1rem; font-weight: 600; }
+              .card .desc { font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem; }
+              .footer {
+                text-align: center;
+                margin-top: 2rem;
+                color: #475569;
+                font-size: 0.8rem;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🧪 Allure Test Reports</h1>
+              <div class="grid">
+                <a class="card" href="./dev/">
+                  <div class="emoji">🟢</div>
+                  <div class="name">DEV</div>
+                  <div class="desc">Development</div>
+                </a>
+                <a class="card" href="./staging/">
+                  <div class="emoji">🟡</div>
+                  <div class="name">STAGING</div>
+                  <div class="desc">Staging</div>
+                </a>
+                <a class="card" href="./preprod/">
+                  <div class="emoji">🟣</div>
+                  <div class="name">PREPROD</div>
+                  <div class="desc">Pre-production</div>
+                </a>
+                <a class="card" href="./prod/">
+                  <div class="emoji">🔴</div>
+                  <div class="name">PROD</div>
+                  <div class="desc">Production</div>
+                </a>
+              </div>
+              <div class="footer">
+                Выберите стенд для просмотра отчёта
+              </div>
+            </div>
+          </body>
+          </html>
+          HTML
+
+      - name: 🚀 Deploy index
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: public
+          keep_files: true

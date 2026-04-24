@@ -1,0 +1,51 @@
+# ── Secrets / environment ──────────────
+.env
+# .env.example — ШАБЛОН, коммитим специально (см. README «Локальный запуск»)
+
+# ── Project data ───────────────────────
+test_data/users.json
+
+# ── Python ─────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
+.Python
+
+# ── Virtual environments ───────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Pytest / coverage ──────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# ── Allure ─────────────────────────────
+allure-results/
+allure-report/
+data_suites*.csv
+
+# ── Playwright ─────────────────────────
+playwright-report/
+test-results/
+
+# ── IDE ────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── OS ─────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini

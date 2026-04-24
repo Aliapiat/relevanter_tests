@@ -1,0 +1,328 @@
+# ════════════════════════════════════════════════════════════════════════════
+# GitLab CI для relevanter-autotests
+# ════════════════════════════════════════════════════════════════════════════
+#
+# Политика прогонов (та же, что и на GitHub Actions):
+#
+#   1) smoke_critical — fail-fast. Без зелёного smoke_critical остальные
+#      шаги не имеют смысла: сломан базовый логин/базовое создание вакансии.
+#      Падение здесь останавливает пайплайн целиком (-x).
+#
+#   2) smoke — основной набор стабильных быстрых тестов (~5 мин).
+#      allow_failure: true, т.к. даже при падении 1-2 тестов нам нужен
+#      полный отчёт.
+#
+#   3) affected / full_regression — расширенный прогон. Запускается в
+#      зависимости от CI-переменной SCOPE:
+#         SCOPE=smoke    (default) — только пункты 1 и 2
+#         SCOPE=affected           — плюс тесты по git diff с origin/main
+#         SCOPE=all                — плюс полный регресс
+#      Плюс точечные маркеры для отладки: SCOPE=vacancy|modals|login|validation
+#
+# Секреты, ожидаемые в Project Settings → CI/CD → Variables (protected,
+# masked где возможно):
+#
+#   ADMIN_EMAIL, ADMIN_PASSWORD         — только для tests/test_login.py
+#   RECRUITER_EMAIL, RECRUITER_PASSWORD — для всех остальных тестов и
+#                                         для API-cleanup
+#
+# Их описание — в README → «Secrets, которые нужно завести в репозитории».
+
+stages:
+  - test
+  - report
+  - deploy
+
+# ─── Общие переменные пайплайна ────────────────────────────────────────────
+# Задаются по умолчанию, переопределяются через Run pipeline → variables
+# в UI GitLab.
+variables:
+  # Стенд по умолчанию. Переопределить: --env, в UI — TEST_ENV.
+  TEST_ENV: dev
+  # Какой объём тестов гонять. smoke — быстрый CI по умолчанию.
+  SCOPE: smoke
+  # Пути для кэша pip и браузеров Playwright.
+  # Ложим внутрь CI_PROJECT_DIR, иначе GitLab cache не увидит эти папки
+  # (cache читает относительные пути от репозитория).
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
+  # Windows-runner'ы иногда отдают cp1252 и ломают вывод с эмоджи.
+  PYTHONIOENCODING: "utf-8"
+  # fetch-depth для git diff в шаге affected_regression — clone с
+  # достаточной глубиной, чтобы origin/main был доступен.
+  GIT_DEPTH: "50"
+  # Не падать из-за перевода строк в сабмодулях под Windows-runner'ами.
+  GIT_SUBMODULE_STRATEGY: none
+
+# ─── Когда пайплайн вообще запускается ─────────────────────────────────────
+# Хотим собирать пайплайн на:
+#   • push (в любую ветку) — фидбек разработчику;
+#   • MR (merge_request_event) — проверка перед мерджем;
+#   • web (ручной запуск из UI) — прогон под разные SCOPE/TEST_ENV.
+# Отдельно отключаем дубль «detached MR pipeline + branch pipeline»:
+# при открытом MR оставляем только MR-пайплайн.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+
+# ─── Базовый image + общие before_script ───────────────────────────────────
+# Используем базовый python-slim и ставим Playwright руками, а не
+# mcr.microsoft.com/playwright/python: на корпоративных GitLab нередко
+# нет доступа к Microsoft Registry без дополнительного proxy, а Python
+# Docker Hub обычно проксирован.
+.test_base:
+  stage: test
+  image: python:3.12-slim
+  cache:
+    - key:
+        files:
+          - requirements.txt
+      paths:
+        - .cache/pip
+        - .cache/ms-playwright
+  before_script:
+    # apt-пакеты, нужные Playwright (Chromium) — вручную, а не
+    # `playwright install --with-deps`, чтобы контролировать точно
+    # то, что ставится, и не плодить лишнего.
+    - apt-get update -qq
+    - >
+      apt-get install -y --no-install-recommends -qq
+      wget ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0
+      libatk1.0-0 libcairo2 libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0
+      libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1
+      libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2
+      git
+    - pip install --quiet --upgrade pip
+    - pip install --quiet -r requirements.txt
+    - python -m playwright install chromium
+  artifacts:
+    when: always
+    paths:
+      - allure-results/
+    expire_in: 7 days
+    # Junit нужен для вкладки Tests в MR. Генерируем через pytest flag.
+    reports:
+      junit: allure-results/junit.xml
+
+# ─── Step 1: smoke_critical (fail-fast) ───────────────────────────────────
+smoke_critical:
+  extends: .test_base
+  script:
+    - mkdir -p allure-results
+    - >
+      pytest tests/
+      --env "$TEST_ENV"
+      --alluredir=allure-results
+      --junitxml=allure-results/junit.xml
+      -m smoke_critical
+      -x
+      -v
+  rules:
+    # Не запускаем для точечных маркеров (vacancy/modals/login/validation) —
+    # там только один целевой job single_marker.
+    - if: '$SCOPE == "vacancy" || $SCOPE == "modals" || $SCOPE == "login" || $SCOPE == "validation"'
+      when: never
+    - when: on_success
+
+# ─── Step 2: smoke (остальной смок) ────────────────────────────────────────
+smoke:
+  extends: .test_base
+  needs:
+    - job: smoke_critical
+      artifacts: true
+      optional: true
+  allow_failure: true
+  script:
+    - mkdir -p allure-results
+    - >
+      pytest tests/
+      --env "$TEST_ENV"
+      --alluredir=allure-results
+      --junitxml=allure-results/junit.xml
+      -m "smoke and not smoke_critical"
+      -v
+  rules:
+    - if: '$SCOPE == "vacancy" || $SCOPE == "modals" || $SCOPE == "login" || $SCOPE == "validation"'
+      when: never
+    - if: '$SCOPE == "smoke" || $SCOPE == "affected" || $SCOPE == "all"'
+      when: on_success
+
+# ─── Step 3a: affected — тесты, затронутые diff'ом ────────────────────────
+affected_regression:
+  extends: .test_base
+  needs:
+    - job: smoke
+      artifacts: true
+      optional: true
+  allow_failure: true
+  variables:
+    GIT_DEPTH: "0"  # нужен полный git-лог для корректного diff с origin/main
+  script:
+    - git fetch origin main || true
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        BASE="HEAD~1"
+      else
+        BASE="origin/main"
+      fi
+    - echo "Base ref: $BASE"
+    - CHANGED="$(git diff --name-only $BASE...HEAD 2>/dev/null || true)"
+    - |
+      echo "Changed files:"
+      echo "$CHANGED"
+    - TARGETS="$(echo "$CHANGED" | python scripts/affected_tests.py || true)"
+    - |
+      if [ -z "$TARGETS" ]; then
+        echo "No affected tests — smoke already covers the diff."
+        exit 0
+      fi
+      echo "Running affected: $TARGETS"
+    - mkdir -p allure-results
+    - >
+      pytest $TARGETS
+      --env "$TEST_ENV"
+      --alluredir=allure-results
+      --junitxml=allure-results/junit.xml
+      -v
+  rules:
+    - if: '$SCOPE == "affected"'
+
+# ─── Step 3b: full regression ─────────────────────────────────────────────
+full_regression:
+  extends: .test_base
+  needs:
+    - job: smoke
+      artifacts: true
+      optional: true
+  allow_failure: true
+  script:
+    - mkdir -p allure-results
+    - >
+      pytest tests/
+      --env "$TEST_ENV"
+      --alluredir=allure-results
+      --junitxml=allure-results/junit.xml
+      -m "not smoke and not smoke_critical"
+      -v
+  rules:
+    - if: '$SCOPE == "all"'
+
+# ─── Step 3c: точечный маркер для отладки ─────────────────────────────────
+single_marker:
+  extends: .test_base
+  script:
+    - mkdir -p allure-results
+    - >
+      pytest tests/
+      --env "$TEST_ENV"
+      --alluredir=allure-results
+      --junitxml=allure-results/junit.xml
+      -m "$SCOPE"
+      -v
+  rules:
+    - if: '$SCOPE == "vacancy" || $SCOPE == "modals" || $SCOPE == "login" || $SCOPE == "validation"'
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STAGE: report — генерация HTML Allure-отчёта
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Отдельным stage'ом, чтобы:
+#   • собрать результаты от ВСЕХ test-job'ов в один отчёт
+#     (allure-results/ из артефактов сливаются автоматически благодаря
+#     общему пути в artifacts.paths);
+#   • подцепить историю трендов из cache между прогонами;
+#   • передать готовый allure-report в stage deploy для публикации на Pages.
+
+generate_report:
+  stage: report
+  image: openjdk:17-slim
+  when: always  # строим отчёт даже если какие-то тесты упали
+  needs:
+    - job: smoke_critical
+      artifacts: true
+      optional: true
+    - job: smoke
+      artifacts: true
+      optional: true
+    - job: affected_regression
+      artifacts: true
+      optional: true
+    - job: full_regression
+      artifacts: true
+      optional: true
+    - job: single_marker
+      artifacts: true
+      optional: true
+  cache:
+    # История тренда per-branch: на main копится отдельно от feature-веток,
+    # чтобы feature не портили историю main'а.
+    - key: "allure-history-${CI_COMMIT_REF_SLUG}"
+      paths:
+        - .allure-history/
+    # Бинарь allure — раз скачали, переиспользуем.
+    - key: allure-cli-2.30.0
+      paths:
+        - .allure-cli/
+  script:
+    - apt-get update -qq && apt-get install -y -qq wget tar >/dev/null
+    # Скачиваем allure-cli, если ещё не закэширован.
+    - |
+      if [ ! -d ".allure-cli/allure-2.30.0" ]; then
+        mkdir -p .allure-cli
+        wget -qO allure.tgz https://github.com/allure-framework/allure2/releases/download/2.30.0/allure-2.30.0.tgz
+        tar -xzf allure.tgz -C .allure-cli
+        rm allure.tgz
+      fi
+    - export PATH="$CI_PROJECT_DIR/.allure-cli/allure-2.30.0/bin:$PATH"
+    - allure --version
+    # Восстанавливаем историю прошлых прогонов, если есть.
+    - |
+      if [ -d ".allure-history" ] && [ "$(ls -A .allure-history 2>/dev/null)" ]; then
+        echo "Восстанавливаем историю из кэша"
+        mkdir -p allure-results
+        cp -r .allure-history allure-results/history
+      fi
+    # Генерируем отчёт.
+    - mkdir -p allure-results
+    - allure generate allure-results --clean -o allure-report
+    # Обновляем кэш истории для следующего прогона.
+    - rm -rf .allure-history
+    - cp -r allure-report/history .allure-history || true
+  artifacts:
+    when: always
+    paths:
+      - allure-report/
+    expire_in: 30 days
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STAGE: deploy — GitLab Pages
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Публикуем отчёт только для main-ветки, чтобы feature-ветки не затирали
+# общий URL каждым pipeline'ом. Адрес отчёта после первого успешного
+# прогона: Settings → Pages.
+
+pages:
+  stage: deploy
+  image: alpine:latest
+  when: always
+  needs:
+    - job: generate_report
+      artifacts: true
+  script:
+    - rm -rf public
+    - mv allure-report public
+    # Минимальная index.html на случай, если её не будет внутри allure-отчёта
+    # (на самом деле Allure кладёт свою index.html — эта строчка холостая).
+    - ls public/index.html || echo "⚠ index.html not found in allure-report"
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH'
