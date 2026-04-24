@@ -61,6 +61,33 @@ workflow:
   before_script:
     - |
       set -e
+
+      # ─── Проверка обязательных CI/CD Variables ────────────────────────
+      # Без них login/cleanup/UI-тесты не поднимутся — лучше упасть сразу
+      # с понятным сообщением, чем ловить мистический HTTP 400.
+      MISSING=""
+      [ -z "$ADMIN_EMAIL" ]        && MISSING="$MISSING ADMIN_EMAIL"
+      [ -z "$ADMIN_PASSWORD" ]     && MISSING="$MISSING ADMIN_PASSWORD"
+      [ -z "$RECRUITER_EMAIL" ]    && MISSING="$MISSING RECRUITER_EMAIL"
+      [ -z "$RECRUITER_PASSWORD" ] && MISSING="$MISSING RECRUITER_PASSWORD"
+      if [ -n "$MISSING" ]; then
+        echo "════════════════════════════════════════════════════════════"
+        echo "❌ В pipeline не заданы обязательные CI/CD Variables:"
+        echo "   $MISSING"
+        echo ""
+        echo "Возможные причины:"
+        echo "  1) Переменные вообще не добавлены в Settings → CI/CD →"
+        echo "     Variables. Нужны: ADMIN_EMAIL, ADMIN_PASSWORD,"
+        echo "     RECRUITER_EMAIL, RECRUITER_PASSWORD."
+        echo "  2) Переменные добавлены с галочкой 'Protect variable', но"
+        echo "     ветка '$CI_COMMIT_REF_NAME' НЕ protected. В этом случае"
+        echo "     нужно либо снять 'Protect variable', либо запускать"
+        echo "     pipeline из protected-ветки (обычно main)."
+        echo "════════════════════════════════════════════════════════════"
+        exit 1
+      fi
+      echo "✓ CI/CD Variables присутствуют"
+
       apt-get update -qq
       apt-get install -y --no-install-recommends -qq \
         wget ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0 \
