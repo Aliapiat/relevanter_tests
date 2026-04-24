@@ -287,19 +287,52 @@ def pytest_configure(config):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
+    """При падении теста собираем максимум контекста для Allure.
+
+    Минимум — скриншот. Добавляем ещё URL, заголовок и HTML body,
+    потому что в CI картинка часто неинформативна (spinner или белый
+    экран), а текст страницы точно говорит, куда нас занесло:
+    залогинились ли, не редиректнуло ли на /login, не вернул ли
+    бэкенд 500/403 и т.д.
+    """
     outcome = yield
     report = outcome.get_result()
-    if report.when == "call" and report.failed:
-        page = item.funcargs.get("page")
-        if page:
-            try:
-                allure.attach(
-                    page.screenshot(),
-                    name="failure_screenshot",
-                    attachment_type=allure.attachment_type.PNG,
-                )
-            except Exception:
-                pass  # Браузер уже закрыт
+    if report.when not in ("setup", "call") or not report.failed:
+        return
+
+    page = item.funcargs.get("page")
+    if not page:
+        return
+
+    try:
+        allure.attach(
+            page.screenshot(full_page=True),
+            name="failure_screenshot",
+            attachment_type=allure.attachment_type.PNG,
+        )
+    except Exception:
+        pass
+
+    try:
+        allure.attach(
+            f"URL: {page.url}\nTitle: {page.title()}",
+            name="page_context",
+            attachment_type=allure.attachment_type.TEXT,
+        )
+    except Exception:
+        pass
+
+    try:
+        html = page.content()
+        if len(html) > 200_000:
+            html = html[:200_000] + "\n<!-- ... truncated ... -->"
+        allure.attach(
+            html,
+            name="page_html",
+            attachment_type=allure.attachment_type.HTML,
+        )
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope="session")

@@ -24,9 +24,7 @@ from faker import Faker
 
 from pages.vacancy_create_page import VacancyCreatePage
 from pages.vacancy_detail_page import VacancyDetailPage
-from pages.search_page import SearchPage
 from pages.dialogs_page import DialogsPage
-from pages.interviews_page import InterviewsPage
 from pages.reports_page import ReportsPage
 
 fake = Faker("ru_RU")
@@ -97,25 +95,31 @@ class TestVacancyNavigationTabs:
         detail = _create_and_open_detail(auth_vacancy_create)
         page = detail.page
 
+        # Замечание: не вызываем здесь SearchPage().should_be_loaded()
+        # и т.п. после switch_nav_tab — сам switch_nav_tab уже
+        # дожидается URL и anchor целевой страницы (см. его реализацию
+        # в VacancyDetailPage). Двойной wait наоборот создавал race:
+        # у тяжёлых страниц (Поиск) React мог за сотни мс перемонтировать
+        # h1, и второй wait валил тест на 30 секунд. POM-методы
+        # should_be_loaded() оставлены в POM для сценариев, когда
+        # страница открывается НЕ через switch_nav_tab, а напрямую
+        # через page.goto(/recruiter/search?...).
+
         # ─── 1. Поиск ───
         with allure.step("Переход на «Поиск»"):
             detail.switch_nav_tab("search")
-            SearchPage(page).should_be_loaded()
 
         # ─── 2. Диалоги ───
         with allure.step("Переход на «Диалоги»"):
             detail.switch_nav_tab("dialogs")
-            DialogsPage(page).should_be_loaded()
 
         # ─── 3. Собеседования ───
         with allure.step("Переход на «Собеседования»"):
             detail.switch_nav_tab("interviews")
-            InterviewsPage(page).should_be_loaded()
 
         # ─── 4. Итоги Подбора ───
         with allure.step("Переход на «Итоги Подбора»"):
             detail.switch_nav_tab("reports")
-            ReportsPage(page).should_be_loaded()
 
         # ─── 5. Возврат на «Вакансия» ───
         with allure.step("Возврат на вкладку «Вакансия»"):
