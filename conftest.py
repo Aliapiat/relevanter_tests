@@ -14,7 +14,7 @@ def pytest_addoption(parser):
         action="store",
         default="dev",
         choices=list(ENVIRONMENTS.keys()),
-        help="Target environment (dev/staging/preprod/prod)",
+        help="Target environment (dev/qa/stage/prod).",
     )
 
 
