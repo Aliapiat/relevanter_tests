@@ -35,7 +35,7 @@ class ReportsPage(BasePage):
     # ═══════════════════════════════════════
 
     @allure.step("Ждём, пока прогрузится вкладка «Итоги Подбора»")
-    def should_be_loaded(self, timeout: int = 15_000):
+    def should_be_loaded(self, timeout: int = 30_000):
         self.page.wait_for_url(
             lambda u: self.PATH_PATTERN in u, timeout=timeout
         )

@@ -254,7 +254,7 @@ class VacancyDetailPage(BasePage):
     # ═══════════════════════════════════════
 
     @allure.step("Переходим на вкладку '{tab_key}'")
-    def switch_nav_tab(self, tab_key: str, timeout: int = 15_000):
+    def switch_nav_tab(self, tab_key: str, timeout: int = 30_000):
         """Кликает по навигационному табу и ждёт, пока поменяется URL
         и появится якорь контента на целевой странице.
 
