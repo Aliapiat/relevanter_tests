@@ -136,7 +136,7 @@ Workflow `.github/workflows/tests.yml` — трёхступенчатый:
 - **`affected`** считает `git diff --name-only <base>...HEAD` и прогоняет через `scripts/affected_tests.py` — там два уровня резолва: поиск `from pages.xxx` в тестах + name-based fallback для POM, которые тесты используют только через фикстуры (например, `pages/login_page.py` → `test_login.py`).
 - **Infra-файлы** (`conftest.py`, `pytest.ini`, `.github/`, `utils/api_client.py`, `config/`) автоматически форсируют полный прогон.
 
-### Ссылки на отчёты
+### Ссылки на отчёты!
 
 | Стенд     | URL |
 | --------- | --- |
