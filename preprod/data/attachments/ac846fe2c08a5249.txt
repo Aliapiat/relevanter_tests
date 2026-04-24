@@ -1,0 +1,3 @@
+
+🔗 Target: preprod → https://hr-qa.acm-ai.ru/
+[cleanup before-session] session_registry пуст — пропускаем
