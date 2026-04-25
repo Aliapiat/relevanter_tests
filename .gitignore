@@ -43,6 +43,21 @@ test-results/
 node_modules/
 package-lock.json
 
+# ── Локальные обёртки над run_tests.bat ────
+# run_clean.bat — персональный скрипт, чистит allure-results
+# перед каждым прогоном (см. сам файл). В командный run_tests.bat
+# не вшит специально: CI пишет в свежий рабочий каталог, чистить
+# незачем; на локалке полезно — отчёт не «слипается» с предыдущим.
+run_clean.bat
+
+# ── Тee-логи прогонов pytest (последний raw stdout/stderr) ─
+# Создаются командами вида `run_tests.bat ... | Tee-Object -FilePath ...`
+# для отладки на локалке. Никогда не коммитим: дублируют то,
+# что и так лежит в allure-results/ и в IDE-терминале.
+# Узкое правило `/last_run*.log` сохраняет уже tracked-файлы в
+# arch/azhukov/results/logs/, которые относятся к архивному TS-набору.
+/last_run*.log
+
 # ── IDE ────────────────────────────────
 .idea/
 .vscode/

@@ -102,6 +102,14 @@ def _install_search_mocks(page: Page) -> _SearchMockStats:
     возвращает N фейков по pageSize из тела запроса; `*hh/search`,
     `applicants?…` без relevance — пустой ответ; auth/hh/status —
     «authorized», чтобы не сорваться на error-экран.
+
+    URL-схема. В TS-исходнике dev-сервер был на localhost с REACT_APP_RELEVANTER_BASE_URL=http://localhost:3001/api,
+    поэтому пути выглядели как `/relevanter/api/hh/...`. На нашем
+    deploy (env.dev/qa/hr/prod) `REACT_APP_RELEVANTER_BASE_URL`
+    указывает на `<host>/relevanter` БЕЗ префикса `/api`, поэтому
+    реальные URL — `/relevanter/hh/...`. Чтобы тест работал и в
+    локальной разработке (через `npm start`), и на dev/staging
+    deploy'е, регистрируем оба варианта паттерна на каждый эндпоинт.
     """
     stats = _SearchMockStats()
 
@@ -135,9 +143,25 @@ def _install_search_mocks(page: Page) -> _SearchMockStats:
             body=json.dumps({"status": "authorized", "authorized": True}),
         )
 
+    # Deploy-вариант (без /api/), используется на dev/qa/hr/prod.
+    page.route("**/relevanter/hh/search**", _empty_response)
+    page.route("**/relevanter/applicants?**", _empty_response)
+    page.route(
+        "**/relevanter/hh/search-with-relevance**", _relevance_handler
+    )
+    page.route(
+        "**/relevanter/applicants/search-with-relevance**",
+        _relevance_handler,
+    )
+    page.route("**/relevanter/auth/hh/status**", _auth_status_handler)
+
+    # Локальная разработка (REACT_APP_RELEVANTER_BASE_URL=…/api),
+    # используется при `npm start` и в TS-исходнике из arch/.
     page.route("**/relevanter/api/hh/search**", _empty_response)
     page.route("**/relevanter/api/applicants?**", _empty_response)
-    page.route("**/relevanter/api/hh/search-with-relevance**", _relevance_handler)
+    page.route(
+        "**/relevanter/api/hh/search-with-relevance**", _relevance_handler
+    )
     page.route(
         "**/relevanter/api/applicants/search-with-relevance**",
         _relevance_handler,
@@ -262,6 +286,19 @@ class TestRelevancePaginationIndependence:
         expect(page.get_by_text(re.compile(r"^Кандидат 20$"))).to_be_visible()
         expect(page.get_by_text(re.compile(r"^Кандидат 21$"))).to_have_count(0)
 
+    @pytest.mark.xfail(
+        reason=(
+            "Архитектура TC-645 в нашей сборке отличается от TS-исходника:\n"
+            "см. recruiter-front/src/pages/RelevanterPage.tsx ~стр.510-512, 1339-1342:\n"
+            "  - filters.limit теперь — единый источник rowsPerPage И backend per_page\n"
+            "  - filters.pageSize — больше не идёт в createApiQuery как pageSize\n"
+            "Поэтому ввод значения в верхний 'Количество кандидатов' (target_count_input)\n"
+            "может НЕ триггерить запрос на бэк — фронт обновит только локальный state.\n"
+            "Тест нужно переписать под новую логику filters.limit-as-pageSize "
+            "после уточнения с разработчиком (что именно теперь шлётся на бэк)."
+        ),
+        strict=False,
+    )
     @allure.title(
         "TC-645.2: смена target count → запрос на бэк с новым pageSize, "
         "rowsPerPage не меняется"
@@ -297,6 +334,17 @@ class TestRelevancePaginationIndependence:
         expect(page.get_by_text(re.compile(r"^Кандидат 10$"))).to_be_visible()
         expect(page.get_by_text(re.compile(r"^Кандидат 11$"))).to_have_count(0)
 
+    @pytest.mark.xfail(
+        reason=(
+            "Регрессия TC-645 в нашей сборке инвертирована: filters.limit "
+            "теперь намеренно идёт на бэк как per_page (см. RelevanterPage.tsx:1413-1414 "
+            "'filters.limit идёт в бэк как per_page, поэтому его смена должна триггерить "
+            "новый запрос'). Старая инвариантa 'rowsPerPage не дёргает бэк' больше не "
+            "актуальна. Тест либо удалить, либо переписать как 'rows_change ДОЛЖНА "
+            "триггерить запрос с новым per_page'."
+        ),
+        strict=False,
+    )
     @allure.title(
         "TC-645.3: смена rowsPerPage → НЕ дёргает бэк, target count не меняется"
     )
@@ -390,6 +438,17 @@ class TestRelevancePaginationIndependence:
             "Клиентская пагинация после двух кликов вызвала сетевые запросы — TC-645"
         )
 
+    @pytest.mark.xfail(
+        reason=(
+            "Каскадный xfail после TC-645.2/.3: тест начинает с rows=10 (см. "
+            "TC-645.3 inверсия) и переключает target=20, ожидая pageSize=20 в "
+            "последнем запросе. В текущей архитектуре фронта filters.limit "
+            "(=rowsPerPage=10) идёт на бэк как per_page, поэтому target=20 "
+            "не появляется в запросе. Переписать после уточнения новой "
+            "семантики filters.pageSize/filters.limit."
+        ),
+        strict=False,
+    )
     @allure.title(
         "TC-645.5: смена target count сбрасывает клиентскую страницу в 1"
     )

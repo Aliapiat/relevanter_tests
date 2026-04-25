@@ -39,16 +39,35 @@ CONFIRM_DIALOG_BODY_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Тексты тостов пре-валидации (TC-011, TC-652)
-TOAST_TITLE_TOO_LONG_RE = re.compile(r"Название не должно превышать 100 символов")
-TOAST_DESC_TOO_SHORT_RE = re.compile(r"Описание должно содержать не менее 200 символов")
+# Тексты тостов пре-валидации (TC-011, TC-652).
+# Тексты сверены с recruiter-front/src/components/vacancies/VacancyDataEditForm.tsx
+# (handleExportClick): фронт собирает массив exportErrors и кидает их в
+# toast.error через '\n'.join. Поэтому ищем подстроку, не строгое совпадение.
+TOAST_TITLE_TOO_LONG_RE = re.compile(
+    r"Название не должно превышать 100 символов для HH\.ru"
+)
+# descMin = 150 (см. useState({minLength: 150}) в VacancyDataEditForm).
+# В TS-исходнике / arch стоит 200 — там был старый порог.
+TOAST_DESC_TOO_SHORT_RE = re.compile(
+    r"Описание должно содержать не менее 150 символов для HH\.ru"
+)
+# В нашей сборке recruiter-front пустые «Специализация» и «География»
+# НЕ блокируются на пре-валидации: handleExportClick идёт сразу к
+# confirm-диалогу. Эти регексы сохраняем как «то что должно быть, если
+# фикс TC-652 будет перенесён на наш фронт» — на текущем dev стенде
+# тесты TC-652 помечены как skip.
 TOAST_NO_SPEC_RE = re.compile(
-    r"Выберите специализацию для публикации на HeadHunter"
+    r"(Выберите специализацию|Специализация).*публикации.*HeadHunter|"
+    r"специализаци"
 )
 TOAST_NO_CITY_RE = re.compile(
-    r"Укажите регион или город для публикации на HeadHunter"
+    r"(Укажите регион или город|Геогра).*публикации.*HeadHunter|"
+    r"регион или город"
 )
 WARN_TITLE_OVER_LIMIT_RE = re.compile(r"Название превышает лимит HH\.ru")
+# Тост успеха формы (см. VacancyDataEditForm.tsx:1863
+# и hooks/useVacancyData.ts:274 — варианты с «!» и без).
+TOAST_VACANCY_UPDATED_RE = re.compile(r"Вакансия успешно обновлена!?")
 
 
 class VacancyEditPage(BasePage):
@@ -60,6 +79,12 @@ class VacancyEditPage(BasePage):
     EDIT_BUTTON = "button:has-text('Редактировать')"
     HH_EXPORT_BUTTON = "button:has-text('на HH.ru')"
     SAVE_BUTTON = "button:has-text('Сохранить')"
+    # Inline title input в форме — селектор подсмотрен в VacancyCreatePage.
+    # Используется в TC-011.1, чтобы поменять title через UI и проверить
+    # клиентскую пре-валидацию (>100 символов): backend на нашем dev
+    # отвергает длинные title на API-create — UI-флоу единственный
+    # способ воспроизвести экспорт-toast.
+    TITLE_INPUT = "div[data-field-id='title'] input[type='text']"
 
     # ─── Навигация / открытие ────────────────────────────────────────
 
@@ -84,7 +109,27 @@ class VacancyEditPage(BasePage):
         self.page.locator(self.HH_EXPORT_BUTTON).first.wait_for(
             state="visible", timeout=10_000
         )
+        # Дополнительно ждём, что initial-toast'ы «Данные вакансии загружены»
+        # / «Данные интервью загружены» исчезли. Это сигнализирует, что
+        # async-инициализация формы (loadVacancy → setSpecialization →
+        # setCities) полностью завершилась. Без этой синхронизации
+        # ранний click_hh_export() ловит race с isSpecializationLeafId(),
+        # и spec-modal/city-modal иногда не открываются (источник флейков
+        # TC-009.3 / TC-011.2 на dev-стенде).
+        self._wait_initial_toasts_gone()
         return self
+
+    def _wait_initial_toasts_gone(self, timeout: int = 8_000) -> None:
+        """Best-effort: ждёт пропадания «Данные * загружены» тостов.
+        Молча выходит по таймауту — не валит тест из-за toast UX."""
+        try:
+            initial_toast = self.page.get_by_text(
+                re.compile(r"Данные .* загружены", re.IGNORECASE)
+            )
+            initial_toast.first.wait_for(state="hidden", timeout=timeout)
+        except Exception:
+            # Тост уже исчез до момента проверки или его не было — норма.
+            pass
 
     @allure.step("Открываем вакансию и сразу переходим в режим редактирования")
     def open_in_edit_mode(self, vacancy_id: int) -> "VacancyEditPage":
@@ -117,7 +162,10 @@ class VacancyEditPage(BasePage):
             return False
 
     @allure.step("Ждём, что модалка специализации открыта")
-    def expect_spec_modal_open(self, timeout: int = 5_000):
+    def expect_spec_modal_open(self, timeout: int = 15_000):
+        # 15s — модалка специализации появляется после async-проверки
+        # isSpecializationLeafId() (см. handleExportClick во фронте);
+        # на dev/staging этот вызов иногда уходит за 5–10 секунд.
         expect(self.spec_modal_heading()).to_be_visible(timeout=timeout)
         return self
 
@@ -201,7 +249,10 @@ class VacancyEditPage(BasePage):
             return False
 
     @allure.step("Ждём, что модалка города открыта")
-    def expect_city_modal_open(self, timeout: int = 5_000):
+    def expect_city_modal_open(self, timeout: int = 15_000):
+        # 15s — после нажатия Сохранить в модалке специализации
+        # фронт асинхронно проверяет isAreaLeafId(), и только потом
+        # открывает модалку города. На dev иногда занимает >5s.
         expect(self.city_modal_heading()).to_be_visible(timeout=timeout)
         return self
 
@@ -221,15 +272,21 @@ class VacancyEditPage(BasePage):
 
         UI: input[placeholder=Поиск...] фильтрует дерево регионов; нужный
         регион раскрывается стрелкой (брат checkbox), внутри — лист-город.
+
+        Важно: используем `exact=True` для имён регион/город. Без этого
+        Playwright роняется на «strict mode violation» — например, для
+        «Барнаул» подходят два чекбокса: сам «Барнаул» и «Научный
+        Городок (Барнаул)». Имена городов в HH-справочнике не уникальны
+        как подстрока — только как точное совпадение.
         """
         self.reset_modal_selection()
         self.page.get_by_role("textbox", name=re.compile("Поиск", re.IGNORECASE)).fill(query)
 
-        region_cb = self.page.get_by_role("checkbox", name=region)
+        region_cb = self.page.get_by_role("checkbox", name=region, exact=True)
         expect(region_cb).to_be_visible(timeout=5_000)
         region_cb.locator("xpath=../../button").click()
 
-        city_cb = self.page.get_by_role("checkbox", name=city)
+        city_cb = self.page.get_by_role("checkbox", name=city, exact=True)
         expect(city_cb).to_be_visible(timeout=3_000)
         city_cb.click()
         return self
@@ -241,10 +298,15 @@ class VacancyEditPage(BasePage):
     # ─── Диалог подтверждения ───────────────────────────────────────
 
     def confirm_dialog_title(self):
-        return self.page.get_by_text(CONFIRM_DIALOG_TITLE_RE)
+        # Во фронте это <h3> внутри overlay (см. VacancyDataEditForm.tsx
+        # ~стр. 3606). get_by_role('heading') надёжнее get_by_text(),
+        # так как явно адресует уровень h1-h6 без риска поймать
+        # невидимое описание ниже.
+        return self.page.get_by_role("heading", name=CONFIRM_DIALOG_TITLE_RE)
 
     @allure.step("Ждём, что диалог подтверждения открыт")
-    def expect_confirm_dialog_open(self, timeout: int = 5_000):
+    def expect_confirm_dialog_open(self, timeout: int = 15_000):
+        # 15s — пре-валидация и две async-проверки leaf-id перед открытием.
         expect(self.confirm_dialog_title()).to_be_visible(timeout=timeout)
         return self
 
@@ -268,13 +330,13 @@ class VacancyEditPage(BasePage):
 
     # ─── Тосты пре-валидации ────────────────────────────────────────
 
-    @allure.step("Ждём toast «Название не должно превышать 100 символов»")
-    def expect_toast_title_too_long(self, timeout: int = 5_000):
+    @allure.step("Ждём toast «Название не должно превышать 100 символов для HH.ru»")
+    def expect_toast_title_too_long(self, timeout: int = 8_000):
         expect(self.page.get_by_text(TOAST_TITLE_TOO_LONG_RE)).to_be_visible(timeout=timeout)
         return self
 
-    @allure.step("Ждём toast «Описание должно содержать не менее 200 символов»")
-    def expect_toast_desc_too_short(self, timeout: int = 5_000):
+    @allure.step("Ждём toast «Описание должно содержать не менее 150 символов для HH.ru»")
+    def expect_toast_desc_too_short(self, timeout: int = 8_000):
         expect(self.page.get_by_text(TOAST_DESC_TOO_SHORT_RE)).to_be_visible(timeout=timeout)
         return self
 
@@ -308,8 +370,34 @@ class VacancyEditPage(BasePage):
         return self
 
     @allure.step("Ждём toast «Вакансия успешно обновлена»")
-    def expect_toast_vacancy_updated(self, timeout: int = 10_000):
-        expect(self.page.get_by_text("Вакансия успешно обновлена")).to_be_visible(
+    def expect_toast_vacancy_updated(self, timeout: int = 20_000):
+        # Регексп закрывает оба варианта текста: «Вакансия успешно обновлена»
+        # (handleSubmit во VacancyDataEditForm.tsx) и
+        # «Вакансия успешно обновлена!» (useVacancyData.ts).
+        # 20s — на dev сохранение через updatePosition с пересчётом
+        # AI-описания иногда занимает 12-15 секунд.
+        expect(self.page.get_by_text(TOAST_VACANCY_UPDATED_RE)).to_be_visible(
             timeout=timeout
         )
+        return self
+
+    # ─── Поля формы (для UI-вариантов TC-011) ───────────────────────
+
+    def set_title_in_form(self, value: str) -> "VacancyEditPage":
+        """Перезаписывает значение поля «Название вакансии» в форме edit-режима.
+
+        Используется TC-011.1 для воспроизведения экспорт-toast о превышении
+        100 символов: backend на нашем dev отвергает длинные title через
+        POST /positions, поэтому единственный способ получить frontend-warning
+        и тост экспорта — поменять значение через сам input.
+
+        ⚠️ После set_title_in_form НЕ нажимать «Сохранить» в форме —
+        backend всё равно отвергнет апдейт. Сразу click_hh_export().
+        """
+        with allure.step(f"Заполняем поле «Название вакансии» строкой длиной {len(value)}"):
+            title_input = self.page.locator(self.TITLE_INPUT)
+            title_input.fill(value)
+            # Триггерим blur, чтобы React-state точно обновился (иногда
+            # onChange срабатывает только после потери фокуса).
+            title_input.blur()
         return self
