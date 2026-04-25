@@ -62,6 +62,10 @@ class VacancyCreatePage(BasePage):
     # фронт всё ещё перерисовывал валидацию в момент первого клика.
     CREATE_REDIRECT_TIMEOUT_MS = 8_000
     CREATE_CLICK_RETRIES = 2
+    # Шаг опроса (мс) при ожидании «либо редирект, либо toast валидации».
+    # 200мс достаточно мелко, чтобы успеть схватить toast до его авто-скрытия,
+    # и достаточно крупно, чтобы не нагружать CDP бесконечными вызовами.
+    REDIRECT_POLL_INTERVAL_MS = 200
 
     # ═══════════════════════════════════════
     # AI АССИСТЕНТ
@@ -475,6 +479,7 @@ class VacancyCreatePage(BasePage):
         исключения.
         """
         self._wait_min_chars_warning_cleared()
+        self._last_validation_toast_text = None
 
         save_continue = self.page.locator(self.SAVE_AND_CONTINUE_BUTTON)
         if save_continue.count() > 0 and save_continue.first.is_visible():
@@ -536,15 +541,14 @@ class VacancyCreatePage(BasePage):
                не создаётся), либо фейл бэка / другая ошибка — мы тихо
                выходим, ничего не ломая.
         """
+        url_pattern = re.compile(r"/recruiter/vacancy/\d+")
         for _ in range(self.CREATE_CLICK_RETRIES):
-            try:
-                self.page.wait_for_url(
-                    re.compile(r"/recruiter/vacancy/\d+"),
-                    timeout=self.CREATE_REDIRECT_TIMEOUT_MS,
-                )
+            outcome = self._wait_redirect_or_validation_toast(url_pattern)
+            if outcome in ("redirect", "validation_toast"):
+                # Если поймали toast валидации — текст уже сохранён в
+                # self._last_validation_toast_text внутри waiter-а; ретраить
+                # клик не нужно, форма очевидно отвергла submit.
                 return
-            except Exception:
-                pass
 
             warn = self.page.locator(self.MIN_CHARS_WARNING)
             if warn.count() == 0 or not warn.first.is_visible():
@@ -564,6 +568,48 @@ class VacancyCreatePage(BasePage):
                     return
             else:
                 return
+
+    def _wait_redirect_or_validation_toast(self, url_pattern) -> str:
+        """Гонка: ждём ЛИБО редиректа на /vacancy/{id}, ЛИБО появления toast
+        валидации (`div[role='status'][aria-live='polite']`).
+
+        Зачем: тост валидации (например, «Зарплата от > до», «Не более 10000
+        символов») — короткоживущий, ~3-5 сек. Если просто ждать
+        CREATE_REDIRECT_TIMEOUT_MS=8s редиректа, тост успевает появиться
+        и исчезнуть в этом окне, а should_show_*_error потом ловит пустоту.
+        Поэтому опрашиваем оба условия параллельно с шагом 200мс.
+
+        Side-effect: при обнаружении тоста снимаем его текст в
+        self._last_validation_toast_text — чтобы ассерт мог опереться
+        на снапшот, даже если к моменту проверки toast уже скрыт.
+
+        Возвращает: "redirect" | "validation_toast" | "timeout".
+        """
+        toast_loc = self.page.locator(self.CHAR_LIMIT_TOAST)
+        elapsed = 0
+        while elapsed < self.CREATE_REDIRECT_TIMEOUT_MS:
+            try:
+                if url_pattern.search(self.page.url):
+                    return "redirect"
+            except Exception:
+                pass
+            try:
+                if toast_loc.count() > 0 and toast_loc.first.is_visible():
+                    try:
+                        self._last_validation_toast_text = (
+                            toast_loc.first.inner_text()
+                        )
+                    except Exception:
+                        self._last_validation_toast_text = ""
+                    return "validation_toast"
+            except Exception:
+                pass
+            try:
+                self.page.wait_for_timeout(self.REDIRECT_POLL_INTERVAL_MS)
+            except Exception:
+                return "timeout"
+            elapsed += self.REDIRECT_POLL_INTERVAL_MS
+        return "timeout"
 
     def _wait_min_chars_warning_cleared(
         self, timeout: int | None = None
@@ -1593,11 +1639,25 @@ class VacancyCreatePage(BasePage):
         ).input_value()
         return len(desc) + len(company) + len(social)
 
+    def _read_validation_toast_text(self, timeout_ms: int = 5000) -> str:
+        """Возвращает текст toast-а валидации.
+
+        Сначала отдаёт snapshot, снятый внутри click_create_vacancy
+        (см. _wait_redirect_or_validation_toast) — он переживает
+        авто-скрытие тоста. Если snapshot пуст (например, тест дёрнул
+        этот метод напрямую, без click_create_vacancy), fallback на живой
+        DOM с обычным wait_for(visible).
+        """
+        snapshot = getattr(self, "_last_validation_toast_text", None)
+        if snapshot:
+            return snapshot
+        toast = self.page.locator(self.CHAR_LIMIT_TOAST)
+        toast.wait_for(state="visible", timeout=timeout_ms)
+        return toast.inner_text()
+
     @allure.step("Проверяем появление тоста об ошибке лимита")
     def should_show_char_limit_error(self):
-        toast = self.page.locator(self.CHAR_LIMIT_TOAST)
-        toast.wait_for(state="visible", timeout=5000)
-        text = toast.inner_text()
+        text = self._read_validation_toast_text()
         assert "не более 10000 символов" in text.lower() or \
                "сократите" in text.lower(), \
             f"Ожидали ошибку лимита, получили: {text}"
@@ -1605,9 +1665,7 @@ class VacancyCreatePage(BasePage):
 
     @allure.step("Проверяем тост об ошибке порядка зарплаты")
     def should_show_salary_order_error(self):
-        toast = self.page.locator(self.CHAR_LIMIT_TOAST)
-        toast.wait_for(state="visible", timeout=5000)
-        text = toast.inner_text()
+        text = self._read_validation_toast_text()
         assert "от" in text.lower() and "до" in text.lower(), \
             f"Ожидали ошибку порядка зарплаты, получили: {text}"
         return self
