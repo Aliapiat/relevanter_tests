@@ -1,0 +1,120 @@
+
+Running 20 tests using 1 worker
+
+  ok  1 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:40:7 › TC-009: Поиск через E-Staff › Полный обход UI E-Staff: табы, статус, настройки, модалка, фильтры, поиск (19.6s)
+  ok  2 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:202:7 › TC-009: Поиск через E-Staff › E-Staff: фильтры без HH-секций (4.9s)
+  ok  3 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:225:7 › TC-009: Поиск через E-Staff › E-Staff: поиск по должности возвращает релевантных кандидатов (1.7m)
+  ok  4 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:293:7 › TC-009: Поиск через E-Staff › E-Staff: фильтры сужают выдачу (должность + зарплата) (3.4m)
+  ➜ API ответ: 495 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Корнюхин Дмитрий Иванович | 	 | +79654499601 | | | dimakornuhin@mail.ru | 	 | — | 	 | ML-инженер | 	 | rus.77.000... | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Смольянинова Елена | 	 | +79153433000 | | | ekaigorodova@yandex.ru | 	 | — | 	 | Руководитель отдела подбора и адаптации персонала | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Акынов Каиржан Серикович | 	 | +77088038388 | | | akynov.k@gmail.com | 	 | — | 	 | Аккаунт менеджер | 	 | — | 	 | 400,000 KZT | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Головин Илья Алексеевич | 	 | +79065363643 | | | glv@karma-dorje.ru | 	 | — | 	 | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Алексеев Денис | 	 | +79944157563 | | | alekseevdenisals@gmail.com | 	 | — | 	 | Системный аналитик | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+  ok  5 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:588:7 › TC-009b: Фильтры E-Staff — реальные данные › Базовый поиск E-Staff: запрос уходит с source=estaff (1.8m)
+  ➜ API ответ: 349 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Корнюхин Дмитрий Иванович | 	 | +79654499601 | | | dimakornuhin@mail.ru | 	 | — | 	 | ML-инженер | 	 | rus.77.000... | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Акынов Каиржан Серикович | 	 | +77088038388 | | | akynov.k@gmail.com | 	 | — | 	 | Аккаунт менеджер | 	 | — | 	 | 400,000 KZT | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Головин Илья Алексеевич | 	 | +79065363643 | | | glv@karma-dorje.ru | 	 | — | 	 | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Алексеев Денис | 	 | +79944157563 | | | alekseevdenisals@gmail.com | 	 | — | 	 | Системный аналитик | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Говорков Константин | 	 | +79858733789 | | | govorkov.digital@gmail.com | 	 | — | 	 | Senior Marketing Manager / Demand Generation & PPC | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+  ok  6 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:606:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: пол М — все кандидаты мужского пола (1.8m)
+  ➜ API ответ: 134 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Смольянинова Елена | 	 | +79153433000 | | | ekaigorodova@yandex.ru | 	 | — | 	 | Руководитель отдела подбора и адаптации персонала | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Самородова Мария | 	 | +79112098114 | | | beautiful.wolf.fury@gmail.com | 	 | — | 	 | MLOps | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Maslenkina Anna | 	 | +79660301667 | | | maslaes@me.com | 	 | — | 	 | Продуктовый маркетолог | 	 | rus.77 | 	 | 3,000 USD | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Терехова Юлия Александровна | 	 | +79256696649 | | | terehova_julia1999@mail.ru | 	 | — | 	 | Руководитель PR-отдела/ Head of PR | 	 | rus.77 | 	 | 300,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Мельникова Анастасия | 	 | +79057269833 | | | ana587@yandex.ru | 	 | — | 	 | PR-менеджер | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+  ok  7 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:630:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: пол Ж — все кандидаты женского пола (1.8m)
+  ➜ API ответ: 341 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=25&ageTo...
+    📋 Строка 1: 	 | Смольянинова Елена | 	 | +79153433000 | | | ekaigorodova@yandex.ru | 	 | — | 	 | Руководитель отдела подбора и адаптации персонала | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Головин Илья Алексеевич | 	 | +79065363643 | | | glv@karma-dorje.ru | 	 | — | 	 | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Алексеев Денис | 	 | +79944157563 | | | alekseevdenisals@gmail.com | 	 | — | 	 | Системный аналитик | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Самородова Мария | 	 | +79112098114 | | | beautiful.wolf.fury@gmail.com | 	 | — | 	 | MLOps | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Говорков Константин | 	 | +79858733789 | | | govorkov.digital@gmail.com | 	 | — | 	 | Senior Marketing Manager / Demand Generation & PPC | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+  ok  8 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:652:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: возраст 25-35 — все кандидаты в диапазоне (1.8m)
+  ➜ API ответ: 36 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=100000&salaryTo=200000&ageF...
+    📋 Строка 1: 	 | Ryzhenkova Olga | 	 | +79998001105 | | | roaddz@icloud.com | 	 | — | 	 | Marketing manager | 	 | rus.77 | 	 | 150,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Пушнов Дмитрий | 	 | +79954946004 | 	 | — | 	 | Интернет-маркетолог / Digital Marketing Manager | 	 | rus.77 | 	 | 120,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Сальников Никита | 	 | +79776127578 | | | Salnikovnik5@yandex.ru | 	 | — | 	 | Digital Marketing Manager / AI Product Manager | 	 | rus.77 | 	 | 160,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Мокина Екатерина Алексеевна | 	 | +79196797510 | | | mokinaekaterina0@gmail.com | 	 | — | 	 | SDR | 	 | rus.21.000... | 	 | 100,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Медведев Никита | 	 | +79052834713 | | | n.medvedev2285@gmail.com | 	 | — | 	 | SDR/BDR | 	 | rus.78 | 	 | 105,000 RUR | 	 | — | 	 | Новый
+  ok  9 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:681:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: зарплата 100k-200k — все в диапазоне (1.8m)
+  ➜ API ответ: 71 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Смольянинова Елена | 	 | +79153433000 | | | ekaigorodova@yandex.ru | 	 | — | 	 | Руководитель отдела подбора и адаптации персонала | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Акынов Каиржан Серикович | 	 | +77088038388 | | | akynov.k@gmail.com | 	 | — | 	 | Аккаунт менеджер | 	 | — | 	 | 400,000 KZT | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Maslenkina Anna | 	 | +79660301667 | | | maslaes@me.com | 	 | — | 	 | Продуктовый маркетолог | 	 | rus.77 | 	 | 3,000 USD | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Терехова Юлия Александровна | 	 | +79256696649 | | | terehova_julia1999@mail.ru | 	 | — | 	 | Руководитель PR-отдела/ Head of PR | 	 | rus.77 | 	 | 300,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Мельникова Анастасия | 	 | +79057269833 | | | ana587@yandex.ru | 	 | — | 	 | PR-менеджер | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+  ok 10 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:715:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: должность «менеджер» — результаты релевантны (1.8m)
+  ➜ API ответ: 273 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=25&ageTo...
+    📋 Строка 1: 	 | Акынов Каиржан Серикович | 	 | +77088038388 | | | akynov.k@gmail.com | 	 | — | 	 | Аккаунт менеджер | 	 | — | 	 | 400,000 KZT | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Головин Илья Алексеевич | 	 | +79065363643 | | | glv@karma-dorje.ru | 	 | — | 	 | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Алексеев Денис | 	 | +79944157563 | | | alekseevdenisals@gmail.com | 	 | — | 	 | Системный аналитик | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Говорков Константин | 	 | +79858733789 | | | govorkov.digital@gmail.com | 	 | — | 	 | Senior Marketing Manager / Demand Generation & PPC | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Самойлов Артем Александрович | 	 | +79999252862 | | | artemiy0997@gmail.com | 	 | — | 	 | System administrator | 	 | rus.77.000... | 	 | — | 	 | — | 	 | Новый
+  ok 11 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:742:7 › TC-009b: Фильтры E-Staff — реальные данные › Комбинация: пол М + возраст 25-40 — мужчины в диапазоне (1.8m)
+  ➜ API ответ: 16 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=100000&salaryTo=300000&ageF...
+    📋 Строка 1: 	 | Терехова Юлия Александровна | 	 | +79256696649 | | | terehova_julia1999@mail.ru | 	 | 	 | Руководитель PR-отдела/ Head of PR | 	 | rus.77 | 	 | 300,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Ryzhenkova Olga | 	 | +79998001105 | | | roaddz@icloud.com | 	 | 	 | Marketing manager | 	 | rus.77 | 	 | 150,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Сальников Никита | 	 | +79776127578 | | | Salnikovnik5@yandex.ru | 	 | 	 | Digital Marketing Manager / AI Product Manager | 	 | rus.77 | 	 | 160,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Амусин Святослав Георгиевич | 	 | +79530568696 | | | pirme@mail.ru | 	 | 	 | Senior менеджер по маркетингу B2B, маркетинговый аналитик, product manager | 	 | rus.77 | 	 | 270,000 RUR | 	 | — | 	 |
+    📋 Строка 5: 	 | Мокина Екатерина Алексеевна | 	 | +79196797510 | | | mokinaekaterina0@gmail.com | 	 | 	 | SDR | 	 | rus.21.000... | 	 | 100,000 RUR | 	 | — | 	 | Новый
+  ok 12 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:772:7 › TC-009b: Фильтры E-Staff — реальные данные › Комбинация: должность + зарплата — оба фильтра применены (1.8m)
+  ➜ API ответ: 436 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Корнюхин Дмитрий Иванович | 	 | +79654499601 | | | dimakornuhin@mail.ru | 	 | — | 	 | ML-инженер | 	 | rus.77.000... | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Смольянинова Елена | 	 | +79153433000 | | | ekaigorodova@yandex.ru | 	 | — | 	 | Руководитель отдела подбора и адаптации персонала | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Акынов Каиржан Серикович | 	 | +77088038388 | | | akynov.k@gmail.com | 	 | — | 	 | Аккаунт менеджер | 	 | — | 	 | 400,000 KZT | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Алексеев Денис | 	 | +79944157563 | | | alekseevdenisals@gmail.com | 	 | — | 	 | Системный аналитик | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Самородова Мария | 	 | +79112098114 | | | beautiful.wolf.fury@gmail.com | 	 | — | 	 | MLOps | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+  ok 13 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:800:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: опыт «Более 6 лет» — параметр передаётся (1.8m)
+  ➜ API ответ: 0 кандидатов (items: 0) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  -  14 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:818:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: опыт «От 3 до 6 лет» — параметр передаётся
+  ➜ API ответ: 145 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Корнюхин Дмитрий Иванович | 	 | +79654499601 | | | dimakornuhin@mail.ru | 	 | — | 	 | ML-инженер | 	 | rus.77.000... | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Самородова Мария | 	 | +79112098114 | | | beautiful.wolf.fury@gmail.com | 	 | — | 	 | MLOps | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Говорков Константин | 	 | +79858733789 | | | govorkov.digital@gmail.com | 	 | — | 	 | Senior Marketing Manager / Demand Generation & PPC | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Карасев Андрей | 	 | +79998667587 | | | andrkar008@gmail.com | 	 | — | 	 | ML-инженер | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Сальников Никита | 	 | +79776127578 | | | Salnikovnik5@yandex.ru | 	 | — | 	 | Digital Marketing Manager / AI Product Manager | 	 | rus.77 | 	 | 160,000 RUR | 	 | — | 	 | Новый
+  ok 15 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:837:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: навыки — параметр skillGroups передаётся корректно (1.8m)
+  ➜ API ответ: 480 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Корнюхин Дмитрий Иванович | 	 | +79654499601 | | | dimakornuhin@mail.ru | 	 | — | 	 | ML-инженер | 	 | rus.77.000... | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Акынов Каиржан Серикович | 	 | +77088038388 | | | akynov.k@gmail.com | 	 | — | 	 | Аккаунт менеджер | 	 | — | 	 | 400,000 KZT | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Головин Илья Алексеевич | 	 | +79065363643 | | | glv@karma-dorje.ru | 	 | — | 	 | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Алексеев Денис | 	 | +79944157563 | | | alekseevdenisals@gmail.com | 	 | — | 	 | Системный аналитик | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Самородова Мария | 	 | +79112098114 | | | beautiful.wolf.fury@gmail.com | 	 | — | 	 | MLOps | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+  ok 16 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:872:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: стоп-лист компаний — параметр передаётся (2.0m)
+  ➜ API ответ: 11 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Мерзляков Дмитрий | 	 | +79161443729 | | | barpampa@gmail.com | 	 | — | 	 | QA senior | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Пушнов Дмитрий | 	 | +79954946004 | 	 | — | 	 | Интернет-маркетолог / Digital Marketing Manager | 	 | rus.77 | 	 | 120,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Кузнецов Давид Асланович | 	 | david25061999@duck.com | 	 | — | 	 | Golang Developer | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Копылов Олег Александрович | 	 | +79046468090 | | | vmoreslove@yandex.ru | 	 | — | 	 | QA Engineer / API & Backend Testing | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Узянов Евгений Дмитриевич | 	 | +79102284658 | | | jonnyuz99@gmail.com | 	 | — | 	 | Старший аналитик | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+  ok 17 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:893:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: компании-доноры — параметр передаётся (2.0m)
+  ➜ API ответ: 5 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Пушнов Дмитрий | 	 | +79954946004 | 	 | — | 	 | Интернет-маркетолог / Digital Marketing Manager | 	 | rus.77 | 	 | 120,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Узянов Евгений Дмитриевич | 	 | +79102284658 | | | jonnyuz99@gmail.com | 	 | — | 	 | Старший аналитик | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Бондаренко Алексей Алексеевич | 	 | +79262118692 | | | yabondaleksey@yandex.ru | 	 | — | 	 | Data Scientist | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Маисеев Алексей | 	 | +79998399373 | | | maiseev_1998@mail.ru | 	 | — | 	 | QA Automation Engineer | 	 | rus.50.022... | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Сенчило Никита | 	 | +79111972205 | | | senchilo.nd@yandex.ru | 	 | — | 	 | Data Analyst / Data Scientist | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+  ok 18 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:914:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: текущая компания — параметр передаётся (1.8m)
+  ➜ API ответ: 15 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Смольянинова Елена | 	 | +79153433000 | | | ekaigorodova@yandex.ru | 	 | — | 	 | Руководитель отдела подбора и адаптации персонала | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Амусин Святослав Георгиевич | 	 | +79530568696 | | | pirme@mail.ru | 	 | — | 	 | Senior менеджер по маркетингу B2B, маркетинговый аналитик, product manager | 	 | rus.77 | 	 | 270,000 RUR | 	 | — |
+    📋 Строка 3: 	 | Тивилев Игорь Андреевич | 	 | +79821431648 | | | igor.tivilev@mail.ru | 	 | — | 	 | Data Engineer | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Прядиев Александр | 	 | +79102863907 | | | al-pr1@yandex.ru | 	 | — | 	 | Архитектор 1С | 	 | rus.36.000... | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Копылов Олег Александрович | 	 | +79046468090 | | | vmoreslove@yandex.ru | 	 | — | 	 | QA Engineer / API & Backend Testing | 	 | rus.78 | 	 | — | 	 | — | 	 | Новый
+  ok 19 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:935:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: предыдущая компания — параметр передаётся (1.8m)
+  ➜ API ответ: 41 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+    📋 Строка 1: 	 | Смольянинова Елена | 	 | +79153433000 | | | ekaigorodova@yandex.ru | 	 | 	 | Руководитель отдела подбора и адаптации персонала | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 2: 	 | Maslenkina Anna | 	 | +79660301667 | | | maslaes@me.com | 	 | 	 | Продуктовый маркетолог | 	 | rus.77 | 	 | 3,000 USD | 	 | — | 	 | Новый
+    📋 Строка 3: 	 | Терехова Юлия Александровна | 	 | +79256696649 | | | terehova_julia1999@mail.ru | 	 | 	 | Руководитель PR-отдела/ Head of PR | 	 | rus.77 | 	 | 300,000 RUR | 	 | — | 	 | Новый
+    📋 Строка 4: 	 | Мельникова Анастасия | 	 | +79057269833 | | | ana587@yandex.ru | 	 | 	 | PR-менеджер | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+    📋 Строка 5: 	 | Лаврикова Диана Сергеевна | 	 | +79165370648 | | | diana.lavrikova@gmail.com | 	 | 	 | Директор по маркетингу и PR, Директор по коммуникациям в ИТ | 	 | rus.77 | 	 | — | 	 | — | 	 | Новый
+  ok 20 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:956:7 › TC-009b: Фильтры E-Staff — реальные данные › Комбинация: пол Ж + должность — женщины с «менеджер» (1.8m)
+
+  Slow test file: [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts (34.6m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 skipped
+  19 passed (34.7m)
+EXIT_CODE: 0

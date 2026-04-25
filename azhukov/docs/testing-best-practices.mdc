@@ -1,0 +1,734 @@
+# Playwright E2E тестирование — Best Practices
+
+**Версия**: 4.0
+**Дата обновления**: 2026-03-17
+**Источник**: https://playwright.dev/docs/best-practices
+
+---
+
+## Принципы Playwright
+
+1. **Изоляция тестов** — каждый тест получает свой BrowserContext (изолированное окно). Это стандартное поведение, не баг.
+2. **Web-first assertions** — используй `await expect(locator).toBeVisible()`, а НЕ `expect(await locator.isVisible()).toBe(true)`.
+3. **Автоматическое ожидание** — Playwright сам ждёт элементы. НЕ используй `waitForTimeout()`, `waitForSelector()`, `waitForLoadState('networkidle')`.
+4. **Стабильные локаторы** — `getByRole()`, `getByText()`, `getByLabel()` — НЕ CSS-селекторы.
+
+---
+
+## Структура проекта
+
+```
+autotests/
+├── playwright.config.ts              # Конфигурация (в корне autotests/)
+├── package.json                      # Зависимости и npm-скрипты
+├── fixtures/                         # Фикстуры (расширения test)
+│   └── auth.ts                       # Утилиты авторизации
+├── pages/                            # Page Object Model (POM)
+│   ├── VacancyCreatePage.ts          # Страница создания вакансии
+│   ├── VacancyViewPage.ts            # Страница просмотра вакансии
+│   └── SidebarComponent.ts           # Компонент сайдбара
+├── automated/                        # Тесты
+│   ├── .auth/                        # storageState (gitignored)
+│   │   └── user.json
+│   ├── auth.setup.ts                 # globalSetup: логин + сохранение storageState
+│   └── e2e/                          # E2E тесты
+│       ├── group-001-vacancy-edit/
+│       │   └── TC-001-navigate-to-edit.spec.ts
+│       ├── group-003-auth/
+│       │   └── TC-006-auth.spec.ts
+│       └── group-004-vacancy-create/
+│           └── TC-007-create-vacancy.spec.ts
+├── test-cases/                       # Описания тест-кейсов (опционально)
+│   └── group-XXX-name/
+│       └── TC-XXX-name.qmd
+└── results/                          # Артефакты (HTML-отчёт, скриншоты)
+    └── report/
+```
+
+### Именование
+
+| Сущность | Формат | Пример |
+|----------|--------|--------|
+| Группа | `group-NNN-name/` | `group-004-vacancy-create/` |
+| Тест-кейс | `TC-NNN-name.spec.ts` | `TC-007-create-vacancy.spec.ts` |
+| Page Object | `PageName.ts` | `VacancyCreatePage.ts` |
+| Фикстура | `name.ts` | `auth.ts` |
+
+---
+
+## Авторизация (storageState)
+
+Логин выполняется **один раз** через `globalSetup` перед всеми тестами. Не отображается в Playwright UI — пользователь видит только реальные тесты.
+
+### globalSetup (`automated/auth.setup.ts`)
+
+```typescript
+import { chromium } from '@playwright/test';
+
+const baseURL = process.env.BASE_URL || 'http://localhost:9900';
+
+async function globalSetup() {
+  const browser = await chromium.launch();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  await page.goto(`${baseURL}/recruiter/`);
+  await page.fill('input[type="email"]', 'admin@example.com');
+  await page.fill('input[type="password"]', 'admin');
+  await page.click('button:has-text("Войти")');
+  await page.waitForURL(/\/recruiter\//, { timeout: 10_000 });
+
+  // Копируем auth-данные из sessionStorage в localStorage
+  // (storageState не захватывает sessionStorage)
+  await page.evaluate(() => {
+    const keys = ['crm_auth_token', 'crm_auth_user', 'crm_auth_role', 'crm_auth_rememberMe'];
+    keys.forEach(key => {
+      const val = sessionStorage.getItem(key);
+      if (val) localStorage.setItem(key, val);
+    });
+  });
+
+  await context.storageState({ path: 'automated/.auth/user.json' });
+  await browser.close();
+}
+
+export default globalSetup;
+```
+
+### Конфигурация (`playwright.config.ts`)
+
+```typescript
+export default defineConfig({
+  globalSetup: './automated/auth.setup.ts',
+  // ...
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'automated/.auth/user.json',
+      },
+    },
+  ],
+});
+```
+
+### Тесты, которым НЕ нужна авторизация (например, тест логина)
+
+```typescript
+// Сбрасываем storageState — страница открывается неавторизованной
+test.use({ storageState: { cookies: [], origins: [] } });
+
+test.describe('TC-006: Авторизация', () => {
+  test('Успешный вход', async ({ page }) => { /* ... */ });
+});
+```
+
+---
+
+## Локаторы (приоритет)
+
+Playwright рекомендует использовать локаторы в порядке приоритета:
+
+### 1. `getByRole()` — приоритетный способ (по доступности)
+
+```typescript
+// Кнопки
+page.getByRole('button', { name: 'Создать вакансию' })
+page.getByRole('link', { name: 'Настройки' })
+
+// Заголовки
+page.getByRole('heading', { name: 'Новая вакансия' })
+
+// Поля ввода
+page.getByRole('textbox', { name: 'Email' })
+page.getByRole('checkbox', { name: 'Запомнить меня' })
+```
+
+### 2. `getByText()` — по видимому тексту
+
+```typescript
+page.getByText('Настройка вакансии')
+page.getByText(/вакансия/i)  // регулярное выражение
+```
+
+### 3. `getByLabel()` — поля формы по label
+
+```typescript
+page.getByLabel('Email')
+page.getByLabel('Пароль')
+```
+
+### 4. `getByPlaceholder()` — по placeholder
+
+```typescript
+page.getByPlaceholder('Frontend Разработчик')
+```
+
+### 5. `getByTestId()` — data-testid (если нет лучшего варианта)
+
+```typescript
+page.getByTestId('vacancy-form')
+```
+
+### ЗАПРЕЩЕНО
+
+```typescript
+// CSS-классы — деталь реализации, меняются при рестайлинге
+page.locator('button.buttonIcon.episode-actions-later')
+
+// XPath — хрупкий, зависит от структуры DOM
+page.locator('//div/div/button')
+
+// ref из MCP — меняется при каждой перезагрузке
+page.locator('[ref="e123"]')
+
+// CSS с числами — нестабильный
+page.locator('.some-class-123')
+```
+
+### Когда допустим `page.locator()`
+
+- CSS-селекторы по атрибутам: `page.locator('input[type="email"]')`
+- Quill editor: `page.locator('.ql-editor').first()`
+- Фильтрация: `page.locator('h1').filter({ hasText: 'Вакансия' })`
+
+---
+
+## Assertions (утверждения)
+
+### Web-first assertions (ПРАВИЛЬНО)
+
+Автоматически ждут и повторяют проверку:
+
+```typescript
+// Видимость
+await expect(page.getByRole('button', { name: 'Сохранить' })).toBeVisible();
+await expect(page.getByText('Ошибка')).toBeHidden();
+
+// Текст
+await expect(page.getByRole('heading')).toHaveText('Новая вакансия');
+await expect(page.getByRole('heading')).toContainText('вакансия');
+
+// URL
+await expect(page).toHaveURL(/\/recruiter\/vacancy\/\d+/);
+await expect(page).not.toHaveURL(/\/vacancy\/create/);
+
+// Количество
+await expect(page.getByRole('listitem')).toHaveCount(3);
+
+// Атрибуты
+await expect(page.getByRole('button')).toBeEnabled();
+await expect(page.getByRole('checkbox')).toBeChecked();
+```
+
+### Manual assertions (НЕПРАВИЛЬНО)
+
+```typescript
+// НИКОГДА так не делай — нет авто-ожидания
+expect(await page.getByText('welcome').isVisible()).toBe(true);
+```
+
+---
+
+## Структура тестов
+
+### Группировка (`test.describe`)
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+test.describe('TC-007: Создание вакансии без импорта', () => {
+
+  test('Создание с минимальными полями', async ({ page }) => {
+    // ...
+  });
+
+  test('Кнопка отмена возвращает без создания', async ({ page }) => {
+    // ...
+  });
+});
+```
+
+### Теги для фильтрации
+
+```typescript
+test('Создание вакансии', { tag: '@smoke' }, async ({ page }) => {
+  // Критичный тест — входит в smoke-набор
+});
+
+test('Редактирование описания', { tag: '@regression' }, async ({ page }) => {
+  // Регрессионный тест
+});
+```
+
+Запуск по тегам:
+```bash
+# Только smoke-тесты
+npx playwright test --grep @smoke
+
+# Всё кроме smoke
+npx playwright test --grep-invert @smoke
+```
+
+### Последовательные тесты (`serial`)
+
+Для тестов, которые зависят друг от друга:
+
+```typescript
+test.describe.configure({ mode: 'serial' });
+
+test('Шаг 1: Создать вакансию', async ({ page }) => { /* ... */ });
+test('Шаг 2: Проверить в списке', async ({ page }) => { /* ... */ });
+```
+
+Если один тест падает — следующие пропускаются и вся группа ретраится целиком.
+
+### Cleanup (afterAll)
+
+Если тест создаёт данные — обязательно cleanup:
+
+```typescript
+test.afterAll(async ({ request }) => {
+  if (!createdId) return;
+  const loginResp = await request.post('/api/v1/auth/login', {
+    data: { email: 'admin@example.com', password: 'admin' },
+  });
+  const { token } = await loginResp.json();
+  await request.delete(`/api/v1/positions/${createdId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+});
+```
+
+---
+
+## Page Object Model (POM)
+
+Для страниц с множеством взаимодействий — выноси локаторы и действия в классы:
+
+```typescript
+// pages/VacancyCreatePage.ts
+import { type Page, type Locator } from '@playwright/test';
+
+export class VacancyCreatePage {
+  readonly page: Page;
+  readonly titleInput: Locator;
+  readonly descriptionEditor: Locator;
+  readonly companyEditor: Locator;
+  readonly salaryToInput: Locator;
+  readonly createButton: Locator;
+  readonly cancelButton: Locator;
+
+  constructor(page: Page) {
+    this.page = page;
+    this.titleInput = page.getByRole('textbox', { name: 'Frontend Разработчик' });
+    this.descriptionEditor = page.locator('.ql-editor').first();
+    this.companyEditor = page.locator('.ql-editor').nth(1);
+    this.salaryToInput = page.getByRole('textbox', { name: 'до *' });
+    this.createButton = page.getByRole('button', { name: 'Создать вакансию' });
+    this.cancelButton = page.getByRole('button', { name: 'Отмена' });
+  }
+
+  async goto() {
+    await this.page.goto('/recruiter/');
+    await this.page.getByRole('button', { name: 'Новая вакансия' }).click();
+    await this.page.waitForURL(/\/recruiter\/vacancy\/create/);
+  }
+
+  async fillMinimal(title: string) {
+    await this.titleInput.fill(title);
+    await this.descriptionEditor.click();
+    await this.descriptionEditor.fill('Описание вакансии');
+    await this.companyEditor.click();
+    await this.companyEditor.fill('О компании');
+    await this.salaryToInput.fill('200000');
+  }
+
+  async submit() {
+    await this.createButton.click();
+  }
+}
+```
+
+Использование в тесте:
+
+```typescript
+import { VacancyCreatePage } from '../../../pages/VacancyCreatePage';
+
+test('Создание вакансии', async ({ page }) => {
+  const vacancyPage = new VacancyCreatePage(page);
+  await vacancyPage.goto();
+  await vacancyPage.fillMinimal('Тестовая вакансия');
+  await vacancyPage.submit();
+  await expect(page).toHaveURL(/\/recruiter\/vacancy\/\d+/);
+});
+```
+
+---
+
+## Конфигурация
+
+### Актуальный `playwright.config.ts`
+
+```typescript
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './automated',
+  globalSetup: './automated/auth.setup.ts',
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: 1,
+  reporter: [
+    ['html', { outputFolder: 'results/report' }],
+    ['list'],
+  ],
+  use: {
+    baseURL: process.env.BASE_URL || 'http://localhost:9900',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    actionTimeout: 10_000,
+    navigationTimeout: 15_000,
+    launchOptions: {
+      slowMo: Number(process.env.SLOW_MO) || 0,
+    },
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'automated/.auth/user.json',
+      },
+    },
+  ],
+});
+```
+
+---
+
+## Запуск тестов
+
+```bash
+cd autotests
+
+# Все тесты (headless по умолчанию, --headed для видимого браузера)
+npx playwright test --headed
+
+# UI режим (интерактивный запуск, выбор тестов, трейсы)
+npx playwright test --ui
+
+# Конкретная группа
+npx playwright test automated/e2e/group-004-vacancy-create/
+
+# Конкретный тест
+npx playwright test TC-007
+
+# По тегу
+npx playwright test --grep @smoke
+
+# С замедлением (для отладки)
+SLOW_MO=1500 npx playwright test
+
+# HTML-отчёт
+npx playwright show-report results/report
+```
+
+### Makefile (из корня hr-recruiter)
+
+```bash
+make playwright       # UI режим
+make playwright-run   # Все тесты с видимым браузером
+```
+
+---
+
+## Codegen — генерация тестов
+
+Playwright умеет записывать действия пользователя и генерировать код:
+
+```bash
+cd autotests
+npx playwright codegen http://localhost:9900/recruiter/
+```
+
+Codegen автоматически выбирает лучшие локаторы (role > text > testid).
+Используй как стартовую точку, затем рефактори.
+
+---
+
+## Процесс создания теста
+
+1. **Разведка через MCP Playwright или codegen** — изучи страницу, найди локаторы
+2. **Напиши тест** в `autotests/automated/e2e/group-NNN-name/TC-NNN-name.spec.ts`
+3. **Запусти** — `npx playwright test TC-NNN`
+4. **Итерируй** — если падает, исправь локаторы/ожидания
+5. **Cleanup** — если тест создаёт данные, добавь `afterAll` для удаления
+
+### Чеклист нового теста
+
+- [ ] Используются `getByRole()` / `getByText()` / `getByLabel()` (НЕ CSS-классы)
+- [ ] Assertions — web-first (`await expect(locator).toBeVisible()`)
+- [ ] Нет `waitForTimeout()` — используй автоматическое ожидание Playwright
+- [ ] Нет `waitForLoadState('networkidle')` — это антипаттерн
+- [ ] Cleanup для созданных данных (если есть)
+- [ ] Тест проходит (`npx playwright test TC-NNN`)
+
+---
+
+## Антипаттерны
+
+| Антипаттерн | Почему плохо | Правильно |
+|-------------|-------------|-----------|
+| `waitForTimeout(2000)` | Хрупкий, медленный | Убрать — Playwright ждёт автоматически |
+| `waitForLoadState('networkidle')` | Ненадёжный, не работает с polling/websocket | `waitForURL()` или web-first assertion |
+| `page.locator('.css-class')` | CSS-класс — деталь реализации | `page.getByRole('button', { name: '...' })` |
+| `expect(await el.isVisible()).toBe(true)` | Нет авто-ожидания | `await expect(el).toBeVisible()` |
+| `page.evaluate(() => ...)` для проверок | Обходит Playwright assertions | `await expect(locator).toHaveText('...')` |
+| `page.$('selector')` | Устаревший API | `page.locator()` / `page.getByRole()` |
+| Общий `page` между тестами через `beforeAll` | Нарушает изоляцию | Каждый тест — свой `page` |
+
+---
+
+## Приоритеты тестирования
+
+| Приоритет | Что тестировать | Теги |
+|-----------|----------------|------|
+| High | Авторизация, создание/редактирование вакансий, ключевые бизнес-процессы | `@smoke` |
+| Medium | Навигация, фильтры, списки, формы настроек | `@regression` |
+| Low | UI-детали, edge cases, визуальные элементы | `@visual` |
+
+---
+
+## Процесс: MCP Playwright (ручное) → Документация → Автотест
+
+### Этап 1: Ручное тестирование через MCP Playwright
+
+Агент тестирует фичу через MCP-инструменты браузера:
+
+```
+1. browser_navigate → http://host.docker.internal:9900/recruiter/...
+2. browser_snapshot → изучить структуру страницы, найти элементы
+3. browser_click / browser_fill_form → выполнить сценарий
+4. browser_snapshot → проверить результат
+5. browser_take_screenshot → зафиксировать визуально
+```
+
+**Цель**: Понять как работает фича, какие элементы на странице, какие шаги нужны.
+
+**Важно**: `ref` из snapshot — ТОЛЬКО для MCP-взаимодействия. В автотесты их НЕ переносить.
+
+### Этап 2: Фиксация результатов
+
+После ручного тестирования зафиксировать:
+
+1. **Последовательность шагов** — что кликать, что заполнять, в каком порядке
+2. **Стабильные локаторы** — `getByRole()`, `getByText()`, CSS для кастомных элементов (Quill editor и т.д.)
+3. **Ожидаемые результаты** — что должно произойти (URL, видимость элементов, текст)
+4. **Edge cases** — лимиты, обязательные поля, нестандартное поведение (redirect при исчерпании кредитов и т.д.)
+
+Опционально: сохранить в `test-cases/group-NNN/TC-NNN.qmd` для документации.
+
+### Этап 3: Автотест
+
+На основе ручного тестирования создать `.spec.ts`:
+
+```typescript
+// autotests/automated/e2e/group-NNN-name/TC-NNN-name.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('TC-NNN: Описание', () => {
+  test('Основной сценарий', async ({ page }) => {
+    await page.goto('/recruiter/');
+    // Шаги из ручного тестирования
+    // Локаторы: getByRole(), getByText(), НЕ ref из MCP
+    // Assertions: web-first
+  });
+});
+```
+
+Запустить: `npx playwright test TC-NNN` — итерировать пока не пройдёт.
+
+---
+
+## Действия при падении тестов
+
+### Алгоритм диагностики
+
+1. **Прочитать ошибку** — что именно упало (timeout, элемент не найден, assertion failed)
+2. **Посмотреть скриншот/видео** — Playwright сохраняет при падении в `test-results/`
+3. **Определить причину**:
+
+| Ошибка | Вероятная причина | Действие |
+|--------|-------------------|----------|
+| `locator.click: Timeout` | Элемент не найден / изменился UI | Проверить через MCP snapshot, обновить локатор |
+| `toHaveURL: expected /.../ received /login` | storageState протух (токен истёк) | Удалить `automated/.auth/user.json`, перезапустить |
+| `toBeVisible: Timeout` | Элемент не появился / UI изменился | Проверить через MCP, обновить тест |
+| `strict mode violation: resolved to N elements` | Локатор слишком общий | Сузить: `.first()`, `.filter()`, более точный `name` |
+| `waitForURL: Timeout` | Redirect не произошёл / бизнес-логика изменилась | Проверить приложение — это баг или новое поведение |
+| `net::ERR_CONNECTION_REFUSED` | Приложение не запущено | `make local` или проверить Docker |
+
+### Воспроизведение багов через автотесты
+
+Когда пользователь сообщает о баге — **сначала попытайся воспроизвести его через Playwright E2E тест**, а не вручную через MCP Playwright или чтение кода.
+
+**Порядок действий:**
+1. Написать автотест, который воспроизводит описанный сценарий
+2. Запустить — если падает, баг подтверждён и зафиксирован тестом
+3. Исправить код
+4. Перезапустить тест — если проходит, баг исправлен
+
+**Преимущества перед ручной проверкой:**
+- Тест остаётся как регрессионная проверка
+- Точно документирует сценарий воспроизведения
+- Можно перезапускать после каждого фикса
+
+**КРИТИЧЕСКИ ВАЖНО — HH.ru экспорт:**
+При тестировании экспорта на HH.ru **ВСЕГДА нажимать "Нет"** в диалоге подтверждения.
+Никогда не допускать реальную отправку вакансии на HH.ru из автотестов.
+В тестах использовать только сценарии, которые заканчиваются отменой/отказом.
+
+### Где баг — в тесте или в приложении?
+
+**Баг в тесте** (починить тест):
+- Локатор устарел (UI изменился, кнопка переименована)
+- Тест зависит от порядка данных, которого нет
+- storageState протух — удалить `.auth/user.json`
+- Тест не учитывает бизнес-ограничения (лимит вакансий и т.д.)
+
+**Баг в приложении** (не трогать тест):
+- Приложение возвращает 500
+- Функционал сломался после деплоя
+- Редирект на неожиданную страницу
+
+### Действия
+
+1. **Если баг в тесте** — исправить локаторы/ожидания, перезапустить
+2. **Если баг в приложении** — сообщить пользователю, описать что сломалось, НЕ "чинить" тест маскировкой бага
+3. **Если непонятно** — проверить вручную через MCP Playwright (browser_navigate + browser_snapshot), сравнить с ожидаемым поведением
+
+### Перезапуск с чистым состоянием
+
+```bash
+# Удалить протухший storageState
+rm -f autotests/automated/.auth/user.json
+
+# Перезапустить тесты (setup создаст новый storageState)
+cd autotests && npx playwright test
+```
+
+---
+
+## Агент-наблюдатель (Watchdog) при запуске автотестов
+
+### Концепция
+
+При запуске E2E автотестов **ОБЯЗАТЕЛЬНО** параллельно запускается фоновый агент-наблюдатель. Его задача — мониторить логи всех сервисов, выявлять ошибки и создавать TODO-задачи для их исправления. Цель: автотест должен в итоге пройти.
+
+### Когда запускать
+
+Агент запускается **одновременно** с запуском Playwright-тестов:
+
+```
+# Основной поток: запуск тестов
+Bash(run_in_background=true): cd autotests && BASE_URL=http://localhost:7800 npx playwright test TC-NNN --headed
+
+# Параллельно: агент-наблюдатель
+Agent(subagent_type="general-purpose", run_in_background=true, description="watchdog: мониторинг логов при автотесте")
+```
+
+### Промпт для агента-наблюдателя
+
+```
+Ты — агент-наблюдатель (watchdog). Сейчас запущены E2E автотесты Playwright.
+Твоя задача — мониторить логи Docker-сервисов и выявлять проблемы, которые мешают тестам пройти.
+
+## Что делать
+
+1. **Мониторинг логов** — каждые 15-20 секунд проверяй логи:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.local.yml logs --tail=50 --since=30s 2>/dev/null | grep -i "error\|exception\|fail\|timeout\|500\|502\|503\|504\|422\|400\|WARN"
+   ```
+
+   Отдельно проверяй ключевые сервисы:
+   - `relevanter-back` — API поиска, HR-Proxy, токены
+   - `business-back` — бизнес-логика, позиции, вакансии
+   - `olivia-back` — диалоги, кампании
+   - `nginx` — проксирование, таймауты
+
+2. **Классификация ошибок** — для каждой найденной ошибки определи:
+   - **Критическая** (блокирует тест): 500, connection refused, missing table/column, auth failure
+   - **Некритическая** (не блокирует, но надо пофиксить): deprecated warnings, missing optional table (activity_logs), slow queries
+   - **Инфраструктурная** (настройка): таймауты nginx, отсутствие миграций, неправильные env-переменные
+
+3. **Создание TODO** — для каждой проблемы создай задачу через TodoWrite:
+   - Описание ошибки (сервис, текст ошибки, timestamp)
+   - Предполагаемая причина
+   - Предложенное решение (конкретный файл и что исправить)
+   - Приоритет: critical / medium / low
+
+4. **Анализ для юнит-тестов** — если ошибка в бизнес-логике:
+   - Определи функцию/метод где произошла ошибка (по stack trace)
+   - Предложи юнит-тест который бы поймал эту ошибку
+   - Укажи файл теста и примерный код
+
+5. **Проверка здоровья сервисов**:
+   ```bash
+   # Health checks
+   curl -s http://127.0.0.1:7800/health
+   curl -s http://127.0.0.1:7800/api/v1/actuator/health
+   curl -s http://127.0.0.1:7800/relevanter/api/health
+   ```
+
+6. **Итоговый отчёт** — когда тесты завершатся, подготовь сводку:
+   - Сколько ошибок найдено (critical / medium / low)
+   - Какие сервисы проблемные
+   - Список TODO для исправления
+   - Предложения по юнит-тестам
+
+## Формат TODO
+
+Используй TodoWrite с такой структурой:
+- `[CRITICAL] сервис: описание` — блокирует тест, фиксить первым
+- `[FIX] сервис: описание` — надо пофиксить
+- `[TEST] сервис: написать юнит-тест для ...` — покрыть тестом
+- `[CONFIG] описание` — настройка инфраструктуры
+
+## Пример находок
+
+- `[CRITICAL] relevanter-back: relation "activity_logs" does not exist` → нужна миграция для создания таблицы
+- `[FIX] nginx: proxy_read_timeout 30s слишком мало для HR-Proxy` → увеличить до 120s
+- `[TEST] hrProxyService: нет теста на timeout при недоступности HR-Proxy` → написать unit test
+- `[CONFIG] business-back: JAVA_HOME не установлен` → добавить в docker-compose environment
+```
+
+### Результат работы агента
+
+Когда агент завершит работу, **обязательно прочитай** его отчёт и:
+
+1. **Critical TODO** → исправляй немедленно, перед повторным запуском теста
+2. **Fix TODO** → исправляй после прохождения теста
+3. **Test TODO** → создай юнит-тесты в соответствующих репозиториях
+4. **Config TODO** → применяй изменения к инфраструктуре
+
+### Интеграция с основным процессом
+
+```
+Запуск автотеста
+├── Playwright test (основной поток, run_in_background)
+├── Watchdog agent (фоновый, мониторит логи)
+│
+├── Тест упал?
+│   ├── Да → прочитать отчёт watchdog → исправить critical TODO → перезапуск
+│   └── Нет → прочитать отчёт watchdog → исправить fix/test TODO
+│
+└── Итог: тест проходит + все TODO закрыты
+```
+
+---
+
+**Версия**: 4.1
+**Статус**: Актуально (Playwright v1.49+)

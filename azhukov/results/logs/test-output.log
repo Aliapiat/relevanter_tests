@@ -1,0 +1,128 @@
+
+Running 20 tests using 1 worker
+
+  ok  1 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:40:7 › TC-009: Поиск через E-Staff › Полный обход UI E-Staff: табы, статус, настройки, модалка, фильтры, поиск (3.5s)
+  ok  2 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:202:7 › TC-009: Поиск через E-Staff › E-Staff: фильтры без HH-секций (2.2s)
+  ok  3 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:225:7 › TC-009: Поиск через E-Staff › E-Staff: поиск по должности возвращает релевантных кандидатов (1.7m)
+  ok  4 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:293:7 › TC-009: Поиск через E-Staff › E-Staff: фильтры сужают выдачу (должность + зарплата) (3.3m)
+  ➜ API ответ: 495 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok  5 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:565:7 › TC-009b: Фильтры E-Staff — реальные данные › Базовый поиск E-Staff: запрос уходит с source=estaff (1.7m)
+  ➜ API ответ: 348 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok  6 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:583:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: пол М — все кандидаты мужского пола (2.0m)
+  ➜ API ответ: 135 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok  7 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:607:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: пол Ж — все кандидаты женского пола (1.9m)
+  ➜ API ответ: 341 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=25&ageTo...
+  ok  8 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:629:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: возраст 25-35 — все кандидаты в диапазоне (1.7m)
+  ➜ API ответ: 36 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=100000&salaryTo=200000&ageF...
+  ok  9 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:658:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: зарплата 100k-200k — все в диапазоне (1.7m)
+  ➜ API ответ: 71 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 10 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:692:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: должность «менеджер» — результаты релевантны (1.7m)
+  ➜ API ответ: 272 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=25&ageTo...
+  ok 11 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:719:7 › TC-009b: Фильтры E-Staff — реальные данные › Комбинация: пол М + возраст 25-40 — мужчины в диапазоне (1.7m)
+  ➜ API ответ: 16 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=100000&salaryTo=300000&ageF...
+  ok 12 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:749:7 › TC-009b: Фильтры E-Staff — реальные данные › Комбинация: должность + зарплата — оба фильтра применены (1.7m)
+  ➜ API ответ: 436 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 13 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:777:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: опыт «Более 6 лет» — параметр передаётся (1.7m)
+  ➜ API ответ: 0 кандидатов (items: 0) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  -  14 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:795:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: опыт «От 3 до 6 лет» — параметр передаётся
+  ➜ API ответ: 145 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 15 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:814:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: навыки — параметр skillGroups передаётся корректно (1.7m)
+  ➜ API ответ: 480 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 16 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:849:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: стоп-лист компаний — параметр передаётся (1.7m)
+  ➜ API ответ: 11 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 17 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:870:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: компании-доноры — параметр передаётся (1.7m)
+  ➜ API ответ: 5 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 18 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:891:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: текущая компания — параметр передаётся (1.7m)
+  ➜ API ответ: 15 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 19 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:912:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: предыдущая компания — параметр передаётся (1.7m)
+  ➜ API ответ: 41 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 20 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:933:7 › TC-009b: Фильтры E-Staff — реальные данные › Комбинация: пол Ж + должность — женщины с «менеджер» (1.7m)
+
+  Slow test file: [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts (32.5m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 skipped
+  19 passed (33.8m)
+cludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 17 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:855:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: компании-доноры — параметр передаётся (1.9m)
+  [BLOCK] Заблокирован авто-поиск: http://localhost:7800/relevanter/api/applicants?source=estaff&limit=20&sortBy=re...
+  ➜ API ответ: 6 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 18 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:876:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: текущая компания — параметр передаётся (1.7m)
+  [BLOCK] Заблокирован авто-поиск: http://localhost:7800/relevanter/api/applicants?source=estaff&limit=20&sortBy=re...
+  ➜ API ответ: 15 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 19 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:897:7 › TC-009b: Фильтры E-Staff — реальные данные › Фильтр: предыдущая компания — параметр передаётся (1.7m)
+  [BLOCK] Заблокирован авто-поиск: http://localhost:7800/relevanter/api/applicants?source=estaff&limit=20&sortBy=re...
+  ➜ API ответ: 41 кандидатов (items: 5) | URL params: ?source=estaff&limit=20&sortBy=relevance&page=1&pageSize=20&excludeUpdatedPeriod=&salaryFrom=&salaryTo=&ageFrom=&ageTo=&...
+  ok 20 [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:918:7 › TC-009b: Фильтры E-Staff — реальные данные › Комбинация: пол Ж + должность — женщины с «менеджер» (1.7m)
+
+
+  1) [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:225:7 › TC-009: Поиск через E-Staff › E-Staff: поиск по должности возвращает релевантных кандидатов 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('table')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 15000ms[22m
+    [2m  - waiting for getByRole('table')[22m
+
+
+      269 |
+      270 |     // --- Таблица загрузилась: проверяем структуру ---
+    > 271 |     await expect(page.getByRole('table')).toBeVisible({ timeout: 15_000 });
+          |                                           ^
+      272 |     await expect(page.getByRole('columnheader', { name: 'ФИО' })).toBeVisible();
+      273 |     await expect(page.getByRole('columnheader', { name: 'Контакты' })).toBeVisible();
+      274 |     await expect(page.getByRole('columnheader', { name: 'Должность' })).toBeVisible();
+        at C:\git\wmt-gitlab\hr-recruiter\autotests\automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:271:43
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e-group-006-estaff-searc-f2335-щает-релевантных-кандидатов-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e-group-006-estaff-searc-f2335-щает-релевантных-кандидатов-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e-group-006-estaff-searc-f2335-щает-релевантных-кандидатов-chromium\error-context.md
+
+  2) [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:284:7 › TC-009: Поиск через E-Staff › E-Staff: фильтры сужают выдачу (должность + зарплата) 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('table')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 15000ms[22m
+    [2m  - waiting for getByRole('table')[22m
+
+
+      322 |     }
+      323 |     const totalWithPosition = data1.total;
+    > 324 |     await expect(page.getByRole('table')).toBeVisible({ timeout: 15_000 });
+          |                                           ^
+      325 |
+      326 |     // --- Второй поиск: должность + зарплата ---
+      327 |     await page.getByRole('button', { name: 'Фильтры', exact: true }).click();
+        at C:\git\wmt-gitlab\hr-recruiter\autotests\automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:324:43
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\e2e-group-006-estaff-searc-b9446--выдачу-должность-зарплата--chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\e2e-group-006-estaff-searc-b9446--выдачу-должность-зарплата--chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\e2e-group-006-estaff-searc-b9446--выдачу-должность-зарплата--chromium\error-context.md
+
+  2 failed
+    [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:225:7 › TC-009: Поиск через E-Staff › E-Staff: поиск по должности возвращает релевантных кандидатов 
+    [chromium] › automated\e2e\group-006-estaff-search\TC-009-estaff-search.spec.ts:284:7 › TC-009: Поиск через E-Staff › E-Staff: фильтры сужают выдачу (должность + зарплата) 
+  1 skipped
+  17 passed (31.5m)
