@@ -70,6 +70,37 @@ class APIClient:
     # ВАКАНСИИ (POSITIONS)
     # ══════════════════════════════════════
 
+    def create_vacancy_raw(self, payload: dict) -> dict:
+        """Создаёт вакансию прямым POST в /api/v1/positions с переданным payload.
+
+        Используется HH-export / E-Staff / Relevance тестами, которым
+        нужно подготовить вакансию с конкретной комбинацией полей
+        (specialization, cities, level, status, questionsCount …) без
+        прохождения через UI-форму. UI-форма выставляет дефолты, которые
+        мешают тестировать граничные случаи.
+
+        ВАЖНО:
+            • title в payload ОБЯЗАН начинаться с одного из префиксов
+              cleanup (`ALIQATEST`), иначе сессионная очистка его не
+              увидит и стенд будет постепенно засоряться.
+            • specialization передаётся строкой ID HH-справочника
+              (например '124' = Тестировщик, '113' = Россия).
+              Несколько ID — через запятую: '11,24'.
+            • cities — массив строк ID HH-справочника (1=Москва,
+              2=Санкт-Петербург, 113=Россия как страна).
+
+        Возвращает полный объект вакансии. Не регистрирует id в
+        session_registry — это делает фикстура hh_export_vacancy.
+        """
+        response = requests.post(
+            f"{self.base_url}/positions",
+            headers=self._headers(),
+            json=payload,
+            timeout=15,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def get_vacancy(self, vacancy_id: int) -> dict:
         """Возвращает полный объект вакансии по ID.
 

@@ -175,6 +175,159 @@ def auth_sidebar(authenticated_page: Page) -> SidebarPage:
     return sidebar
 
 
+# ═══════════════════════════════════════════
+# HH-EXPORT / RELEVANCE — фикстуры подготовки данных через API
+# ═══════════════════════════════════════════
+#
+# TS-тесты в arch/ создавали тестовые вакансии прямым POST на бэкенд
+# и удаляли их после теста. Этот же паттерн нам нужен для HH-export
+# и relevance-pagination сценариев: UI-форма выставляет дефолты,
+# которые мешают воспроизвести граничные случаи (пустая специализация,
+# несколько городов, специфичные ID HH-справочника, и т. п.).
+#
+# `make_hh_test_vacancy` — фабрика, которая поверх API-клиента создаёт
+# вакансию с разумными дефолтами и регистрирует её id в session_registry,
+# чтобы общая сессионная очистка её увидела. После теста вакансия
+# удаляется явно через api_client.delete_vacancy — это быстрее и
+# надёжнее, чем ждать сессионного хука.
+
+# HH API ID (HH-справочники, не наши БД-id) — для «человеко-читаемых»
+# вызовов в тестах. Совпадают с TS-тестами в arch/azhukov.
+HH_SPEC_TESTER = "124"           # листовой: ИТ → Тестировщик
+HH_SPEC_DEVELOPER = "96"         # листовой: ИТ → Программист, разработчик
+HH_SPEC_IT_GROUP = "11"          # группа:  Информационные технологии
+HH_SPEC_ART_GROUP = "24"         # группа:  Искусство, развлечения, массмедиа
+HH_SPEC_IT_AND_ART = "11,24"     # две группы — гарантирует open модалки
+
+HH_CITY_MOSCOW = "1"
+HH_CITY_SPB = "2"
+HH_CITY_RUSSIA = "113"           # страна (не листовой → должен открыть модалку)
+
+
+def _hh_default_payload(
+    title: str,
+    *,
+    description: str | None = None,
+    company_description: str | None = None,
+    specialization: str = "",
+    cities: list[str] | None = None,
+) -> dict:
+    """Базовый payload для POST /api/v1/positions с разумными дефолтами.
+
+    Дефолтное описание ≥ 200 символов plain-text, чтобы пре-валидация
+    HH-экспорта по описанию проходила (TC-011, TC-652). Длинное
+    описание в TS-тестах формируется тем же приёмом.
+    """
+    if description is None:
+        description = (
+            "<p>"
+            + "Описание вакансии с достаточной длиной для прохождения валидации HH.ru. " * 5
+            + "</p>"
+        )
+    if company_description is None:
+        company_description = (
+            "<p>"
+            + "Описание компании для автоматизированного теста экспорта на hh.ru. " * 3
+            + "</p>"
+        )
+    if cities is None:
+        cities = []
+    return {
+        "title": title,
+        "description": description,
+        "companyDescription": company_description,
+        "salaryTo": 100_000,
+        "specialization": specialization,
+        "cities": cities,
+        "topics": ["e2e-hh-export"],
+        "answerTime": 60,
+        "level": "MIDDLE",
+        "status": "ACTIVE",
+        "questionsCount": 5,
+    }
+
+
+@pytest.fixture
+def make_hh_test_vacancy(api_client: APIClient):
+    """Фабрика: создаёт вакансию через API с указанными HH-полями и
+    регистрирует её для cleanup. Вакансии создаются с префиксом
+    `ALIQATEST_HH_` — попадают в общий sweep по префиксу `ALIQATEST`.
+
+    Использование::
+
+        def test_hh_export(make_hh_test_vacancy, ...):
+            vacancy = make_hh_test_vacancy(
+                tag="TC009-main",
+                specialization="11,24",
+                cities=["1", "2"],
+            )
+            vid = vacancy["id"]
+            ...
+
+    Все созданные через эту фабрику вакансии удаляются в teardown
+    через api_client.delete_vacancy. Если удаление упало — id остаётся
+    в session_registry, общий sessionscope cleanup доберёт его в конце.
+    """
+    created_ids: list[int] = []
+
+    def _make(
+        *,
+        tag: str = "vacancy",
+        title: str | None = None,
+        description: str | None = None,
+        company_description: str | None = None,
+        specialization: str = "",
+        cities: list[str] | None = None,
+        extra: dict | None = None,
+    ) -> dict:
+        if title is None:
+            import time, random, string
+            suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+            title = f"ALIQATEST_HH_{tag}_{int(time.time() * 1000)}_{suffix}"
+        # Гарантия префикса для сессионной очистки.
+        if not title.startswith("ALIQATEST"):
+            title = f"ALIQATEST_HH_{title}"
+
+        payload = _hh_default_payload(
+            title=title,
+            description=description,
+            company_description=company_description,
+            specialization=specialization,
+            cities=cities,
+        )
+        if extra:
+            payload.update(extra)
+
+        vacancy = api_client.create_vacancy_raw(payload)
+        vid = vacancy.get("id")
+        if vid is not None:
+            created_ids.append(vid)
+            session_registry.register(vid)
+            attach_vacancy_id(vid)
+        return vacancy
+
+    yield _make
+
+    for vid in created_ids:
+        try:
+            api_client.delete_vacancy(vid)
+            session_registry.unregister(vid)
+        except Exception as e:
+            # Не валим тест из-за teardown; сессионный sweep подберёт.
+            print(f"[hh_cleanup] Не удалось удалить вакансию id={vid}: {e}")
+
+
+@pytest.fixture
+def vacancy_edit(authenticated_page: Page):
+    """Готовый VacancyEditPage поверх авторизованной страницы.
+
+    Не открывает никакой конкретной вакансии — это делает тест,
+    зная её id (из make_hh_test_vacancy).
+    """
+    from pages.vacancy_edit_page import VacancyEditPage
+    return VacancyEditPage(authenticated_page)
+
+
 @pytest.fixture
 def auth_vacancy_create(authenticated_page: Page, api_client: APIClient) -> VacancyCreatePage:
     """
