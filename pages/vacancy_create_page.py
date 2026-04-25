@@ -49,7 +49,19 @@ class VacancyCreatePage(BasePage):
     # к LLM-бэкенду может длиться десятки секунд).
     REQUIREMENTS_AI_TIMEOUT_MS = 90_000
     # Таймаут ожидания исчезновения amber-подсказки 150 символов.
-    MIN_CHARS_WAIT_MS = 8_000
+    # На медленных стендах (QA / preprod) фронт пересчитывает счётчик
+    # символов с заметной задержкой после Quill-редакторов. Если кликнуть
+    # «Сохранить и продолжить» пока подсказка ещё видна — кнопка disabled,
+    # клик уходит «в молоко», URL не меняется, и тест падает в sidebar
+    # на 20-секундном wait_for. Поэтому держим запас.
+    MIN_CHARS_WAIT_MS = 20_000
+
+    # Окно ожидания редиректа /vacancy/create → /vacancy/{id} после клика
+    # «Сохранить и продолжить». Если за это время не редиректнуло — пробуем
+    # кликнуть ещё раз (до CREATE_CLICK_RETRIES попыток), на случай если
+    # фронт всё ещё перерисовывал валидацию в момент первого клика.
+    CREATE_REDIRECT_TIMEOUT_MS = 8_000
+    CREATE_CLICK_RETRIES = 2
 
     # ═══════════════════════════════════════
     # AI АССИСТЕНТ
@@ -467,6 +479,7 @@ class VacancyCreatePage(BasePage):
         save_continue = self.page.locator(self.SAVE_AND_CONTINUE_BUTTON)
         if save_continue.count() > 0 and save_continue.first.is_visible():
             save_continue.first.click()
+            self._retry_save_if_validation_lagged(save_continue)
             return self
 
         create_btn = self.page.locator(self.CREATE_VACANCY_BUTTON)
@@ -496,6 +509,61 @@ class VacancyCreatePage(BasePage):
     # на POST /api/v1/positions (conftest.authenticated_page) — нулевая
     # задержка, плюс второй контур через get_vacancy_id_from_url как
     # страховка, если listener не успел сработать.
+
+    def _retry_save_if_validation_lagged(self, save_btn) -> None:
+        """Повторяет клик «Сохранить и продолжить», если первый клик не привёл
+        к редиректу из-за того, что фронт ещё не успел пересчитать валидацию.
+
+        Сценарий, который этот метод закрывает (наблюдался на QA / preprod):
+            1. _wait_min_chars_warning_cleared отработал свой таймаут и ушёл,
+               подсказка к этому моменту вроде бы исчезла.
+            2. Тест кликает «Сохранить и продолжить».
+            3. Фронт ровно в этот момент пересчитывает счётчик символов
+               и показывает amber-подсказку обратно (race condition между
+               debounced пересчётом и onClick handler-ом). Кнопка
+               disabled-ится сразу после клика, форма не отправляется,
+               URL остаётся /vacancy/create.
+            4. Тест уходит ждать вакансию в sidebar — её там нет, таймаут.
+
+        Логика лечения:
+            • Ждём CREATE_REDIRECT_TIMEOUT_MS секунд URL == /vacancy/{id}.
+              Если редирект пришёл — всё ок, выходим.
+            • Если редиректа нет И amber-подсказка снова видна — значит мы
+              попали в гонку: ждём её исчезновения подольше и пробуем
+              кликнуть ещё раз (до CREATE_CLICK_RETRIES попыток).
+            • Если редиректа нет, но и подсказки тоже нет — это либо
+               negative-кейс (тест специально проверяет, что вакансия
+               не создаётся), либо фейл бэка / другая ошибка — мы тихо
+               выходим, ничего не ломая.
+        """
+        for _ in range(self.CREATE_CLICK_RETRIES):
+            try:
+                self.page.wait_for_url(
+                    re.compile(r"/recruiter/vacancy/\d+"),
+                    timeout=self.CREATE_REDIRECT_TIMEOUT_MS,
+                )
+                return
+            except Exception:
+                pass
+
+            warn = self.page.locator(self.MIN_CHARS_WARNING)
+            if warn.count() == 0 or not warn.first.is_visible():
+                return
+
+            try:
+                warn.first.wait_for(
+                    state="hidden", timeout=self.MIN_CHARS_WAIT_MS
+                )
+            except Exception:
+                return
+
+            if save_btn.count() > 0 and save_btn.first.is_visible():
+                try:
+                    save_btn.first.click()
+                except Exception:
+                    return
+            else:
+                return
 
     def _wait_min_chars_warning_cleared(
         self, timeout: int | None = None
