@@ -1,0 +1,8 @@
+[cleanup after-session] SKIP 3 вакансий с префиксом ALIQATEST, которые не создавались в этой сессии (не удаляем чужое): [2306, 2308, 2310]
+[cleanup after-session] в реестре есть id [2307, 2309], но сервер уже не отдаёт их по префиксу — вероятно, тест удалил их сам. Чистим из реестра.
+[cleanup after-session] удалена id=2301 'ALIQATEST_SearchFilter_9047' → 204
+[cleanup after-session] удалена id=2302 'ALIQATEST_SearchFilter_4022' → 204
+[cleanup after-session] удалена id=2303 'ALIQATEST_SearchFilter_1673' → 204
+[cleanup after-session] удалена id=2304 'ALIQATEST_SearchFilter_7199' → 204
+[cleanup after-session] удалена id=2305 'ALIQATEST_SearchFilter_9051' → 204
+[cleanup after-session] итого: удалено 5, пропущено по whitelist 0, чужих пропущено 3
