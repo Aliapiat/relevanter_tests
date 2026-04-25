@@ -1,1 +1,1 @@
-{"total":1,"items":[{"uid":"185120ec23e5b931115f82e0e6d1fd60","name":"\uD83D\uDDA5 preprod","statistic":{"failed":0,"broken":1,"skipped":0,"passed":4,"unknown":0,"total":5}}]}
+{"total":1,"items":[{"uid":"185120ec23e5b931115f82e0e6d1fd60","name":"\uD83D\uDDA5 preprod","statistic":{"failed":0,"broken":1,"skipped":4,"passed":239,"unknown":0,"total":244}}]}
