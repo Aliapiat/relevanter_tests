@@ -39,6 +39,10 @@ data_suites*.csv
 playwright-report/
 test-results/
 
+# ── Node (для архивных Playwright/TS-тестов в arch/) ─────
+node_modules/
+package-lock.json
+
 # ── IDE ────────────────────────────────
 .idea/
 .vscode/
