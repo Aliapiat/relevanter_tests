@@ -1,1 +1,1 @@
-{"total":2,"items":[{"uid":"f78a891596e8ea4e1be5716bc4b536fb","name":"Element not found / selector issues","statistic":{"failed":0,"broken":1,"skipped":0,"passed":0,"unknown":0,"total":1}},{"uid":"64c1a3a6ef2e4709e96e6661ad84b492","name":"Playwright timeouts (flaky/infra)","statistic":{"failed":0,"broken":1,"skipped":0,"passed":0,"unknown":0,"total":1}}]}
+{"total":0,"items":[]}
