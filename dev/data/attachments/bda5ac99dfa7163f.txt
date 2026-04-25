@@ -1,0 +1,2 @@
+URL: https://hr-dev.acm-ai.ru/recruiter/search?source=hh&limit=10&sortBy=relevance&page=1&pageSize=20&salaryTo=200000&incomeSpecified=false&includeNoAge=true&companyFilterMode=current&positionName=ALIQATEST_%D0%94%D0%B8%D1%81%D0%BF%D0%BB%D0%B5%D0%B9_9596&excludeJumpers=false&filterByExpIndustry=false&scoringEnabled=true&strictRegionSearch=false&metroCityId=1510&workFormat=%D0%93%D0%B8%D0%B1%D1%80%D0%B8%D0%B4
+Title: HR Recruiter - Автоматизированные собеседования

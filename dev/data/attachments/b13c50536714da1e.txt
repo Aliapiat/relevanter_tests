@@ -1,0 +1,17 @@
+[cleanup after-session] в реестре есть id [2698, 2699, 2700, 2701, 2714, 2715, 2716, 2717, 2718, 2719, 2720, 2721, 2723, 2724, 2725, 2726, 2727, 2728, 2729, 2730, 2731, 2732, 2733, 2734, 2735, 2736, 2737, 2738, 2739, 2740, 2741, 2742, 2743, 2754, 2755, 2756, 2757, 2758, 2759, 2776, 2777, 2778, 2779, 2780, 2783, 2784, 2785, 2786, 2787, 2788, 2789, 2790, 2791, 2792], но сервер уже не отдаёт их по префиксу — вероятно, тест удалил их сам. Чистим из реестра.
+[cleanup after-session] удалена id=2710 'ALIQATEST_SearchFilter_2189' → 204
+[cleanup after-session] удалена id=2711 'ALIQATEST_SearchFilter_5799' → 204
+[cleanup after-session] удалена id=2713 'ALIQATEST_SearchFilter_4983' → 204
+[cleanup after-session] удалена id=2744 'ALIQATEST_Дисплей_6398' → 204
+[cleanup after-session] удалена id=2745 'ALIQATEST_Дисплей_2010' → 204
+[cleanup after-session] удалена id=2746 'ALIQATEST_Дисплей_8869' → 204
+[cleanup after-session] удалена id=2747 'ALIQATEST_Дисплей_3696' → 204
+[cleanup after-session] удалена id=2748 'ALIQATEST_Дисплей_3721' → 204
+[cleanup after-session] удалена id=2749 'ALIQATEST_Дисплей_4300' → 204
+[cleanup after-session] удалена id=2750 'ALIQATEST_Дисплей_2719' → 204
+[cleanup after-session] удалена id=2751 'ALIQATEST_Дисплей_9156' → 204
+[cleanup after-session] удалена id=2752 'ALIQATEST_Дисплей_7231' → 204
+[cleanup after-session] удалена id=2753 'ALIQATEST_Дисплей_8309' → 204
+[cleanup after-session] удалена id=2781 'ALIQATEST_Tabs_5666' → 204
+[cleanup after-session] удалена id=2782 'ALIQATEST_Tabs_5012' → 204
+[cleanup after-session] итого: удалено 15, пропущено по whitelist 0, чужих пропущено 0
