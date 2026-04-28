@@ -122,7 +122,13 @@ def write_environment_properties(results_dir: str | Path) -> None:
     props: dict[str, str | None] = {
         "Environment": env_name,
         "Base.URL": base_url,
-        "Browser": os.getenv("BROWSER", "chromium"),
+        # Браузер захардкожен — в browser_type_launch_args
+        # (tests/conftest.py) `channel` не задаётся, Playwright всегда
+        # запускает свой bundled Chromium. Раньше тут читалось из env,
+        # но переменная не передавалась в Playwright и вводила в
+        # заблуждение (можно было увидеть "Browser: chrome" в отчёте,
+        # хотя реально работал Chromium).
+        "Browser": "chromium",
         "Headless": str(getattr(settings, "HEADLESS", False)) if settings else "",
         "Viewport": "1920x1080",
         "Python": sys.version.split()[0],

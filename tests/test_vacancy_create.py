@@ -205,12 +205,12 @@ class TestVacancyTabs:
         # После клика таб должен получить активный стиль
         assert tab.is_visible()
 
-    @allure.title("Переключение на таб 'Настройка интервью'")
+    @allure.title("Переключение на таб 'Настройка AI скрининга'")
     @pytest.mark.vacancy
     def test_switch_to_interview_settings(
         self, auth_vacancy_create
     ):
-        auth_vacancy_create.switch_tab("Настройка интервью")
+        auth_vacancy_create.switch_tab("Настройка AI скрининга")
         tab = auth_vacancy_create.page.locator(
             auth_vacancy_create.TAB_INTERVIEW_SETTINGS
         )

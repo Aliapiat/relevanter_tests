@@ -20,7 +20,7 @@ class VacancyCreatePage(BasePage):
     # Табы переключения
     TAB_VACANCY_SETTINGS = "p:has-text('Настройка вакансии')"
     TAB_DIALOG_REQUIREMENTS = "p:has-text('Настройка рассылки')"
-    TAB_INTERVIEW_SETTINGS = "p:has-text('Настройка интервью')"
+    TAB_INTERVIEW_SETTINGS = "p:has-text('Настройка AI скрининга')"
 
     # ═══════════════════════════════════════
     # КНОПКИ ДЕЙСТВИЙ
@@ -216,28 +216,45 @@ class VacancyCreatePage(BasePage):
         return self
 
     def get_vacancy_id_from_url(self) -> int | None:
-        """Извлекает ID созданной вакансии из URL (pattern: /vacancy/{id}).
+        """Извлекает ID вакансии из URL вида `/vacancy/<id>` (или
+        `/recruiter/vacancy/<id>`).
 
-        Side-effect: если id успешно извлечён, регистрируем его в
-        session_registry. Этот метод вызывают из тестов ПОСЛЕ того,
-        как они уже дождались редиректа на detail-страницу созданной
-        вакансии — то есть вызов почти всегда означает «вот id моей
-        только что созданной вакансии». Регистрация здесь — вторая
-        линия страховки к регистрации в click_create_vacancy:
-        если best-effort там не уложился в таймаут, реестр всё равно
-        получит нужный id из этой точки.
+        ЧИСТЫЙ GETTER. Никаких side-effect'ов: не регистрирует id в
+        session_registry и не прикрепляет его к Allure.
+
+        История: раньше метод регистрировал id в реестре «на всякий
+        случай». Это пробивало контракт cleanup-а: если тест навигировал
+        на детальную страницу чужой вакансии (через сайдбар, пагинацию,
+        ссылку в списке) и кто-то вызывал этот метод — её id попадал в
+        реестр, и сессионная очистка считала её «нашей». Регистрация
+        теперь живёт строго там, где мы ТОЧНО знаем, что вакансию
+        создали мы:
+            • network-listener `_register_vacancy_from_response`
+              (POST /api/v1/positions → 2xx, см. tests/conftest.py);
+            • явный `_register_just_created_vacancy()` после успешного
+              редиректа в `click_create_vacancy` / retry-loop'е;
+            • фабрики `make_hh_test_vacancy` / `cleanup_test_vacancies`,
+              которые регистрируют id явно после своих POST'ов.
         """
         try:
             match = re.search(r'/vacancy/(\d+)', self.page.url)
-            vid = int(match.group(1)) if match else None
+            return int(match.group(1)) if match else None
         except Exception:
             return None
+
+    def _register_just_created_vacancy(self) -> int | None:
+        """Регистрирует id вакансии из текущего URL как СВЕЖЕ СОЗДАННОЙ.
+
+        Вызывается ТОЛЬКО из мест, где гарантировано, что мы только что
+        нажали «Сохранить и продолжить» / «Создать вакансию» и фронт
+        отредиректил нас на /vacancy/<id> в ответ на наш POST. В отличие
+        от `get_vacancy_id_from_url`, этот метод имеет side-effect:
+        реестр + Allure. Дублирует network-listener для надёжности
+        (listener может не успеть, если тест моментально дёргает teardown).
+        """
+        vid = self.get_vacancy_id_from_url()
         if vid:
             session_registry.register(vid)
-            # Дублируем привязку к Allure: если network-listener по какой-то
-            # причине не отработал (например, вакансия создана не этим
-            # page-контекстом), всё равно прикрепим vacancy_id к текущему
-            # тесту, чтобы в отчёте было по чему искать.
             attach_vacancy_id(vid)
         return vid
 
@@ -544,10 +561,18 @@ class VacancyCreatePage(BasePage):
         url_pattern = re.compile(r"/recruiter/vacancy/\d+")
         for _ in range(self.CREATE_CLICK_RETRIES):
             outcome = self._wait_redirect_or_validation_toast(url_pattern)
-            if outcome in ("redirect", "validation_toast"):
-                # Если поймали toast валидации — текст уже сохранён в
-                # self._last_validation_toast_text внутри waiter-а; ретраить
-                # клик не нужно, форма очевидно отвергла submit.
+            if outcome == "redirect":
+                # Точка истины: фронт сам нас перевёл на /vacancy/<id> в
+                # ответ на наш POST → это ТОЧНО только что созданная нами
+                # вакансия, безопасно регистрировать в реестре. Это второй
+                # контур к network-listener'у на случай, если listener
+                # не успел распарсить тело ответа.
+                self._register_just_created_vacancy()
+                return
+            if outcome == "validation_toast":
+                # Текст уже сохранён в self._last_validation_toast_text
+                # внутри waiter-а; ретраить клик не нужно, форма очевидно
+                # отвергла submit.
                 return
 
             warn = self.page.locator(self.MIN_CHARS_WARNING)
@@ -649,7 +674,14 @@ class VacancyCreatePage(BasePage):
 
     @allure.step("Переключаемся на таб '{tab_name}'")
     def switch_tab(self, tab_name: str):
-        """Переключает таб: 'Настройка вакансии', 'Настройка рассылки', 'Настройка интервью'"""
+        """Переключает таб: 'Настройка вакансии', 'Настройка рассылки', 'Настройка AI скрининга'.
+
+        Третий таб исторически был «Настройка интервью» — на фронте
+        переименован в «Настройка AI скрининга» (id таба `interview`
+        в VacancyDataEditForm.tsx остался прежним, поменялся только
+        UI-label). Имя константы TAB_INTERVIEW_SETTINGS осознанно
+        не переименовано: бизнес-сущность та же.
+        """
         self.page.locator(f"p:has-text('{tab_name}')").click()
         return self
 

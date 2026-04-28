@@ -44,6 +44,52 @@ from tests.conftest import (
     HH_CITY_SPB,
     HH_CITY_RUSSIA,
 )
+from utils.api_client import APIClient
+
+
+def _assert_vacancy_fields(
+    api_client: APIClient,
+    vacancy_id: int,
+    *,
+    specialization,
+    cities,
+) -> dict:
+    """Дёргает `GET /positions/{id}` и проверяет, что бэк сохранил
+    переданные значения specialization / cities ровно так, как мы их
+    отправили в POST.
+
+    Зачем: фабрика `make_hh_test_vacancy` отправляет нужные поля в
+    payload, но это ничего не говорит о том, что бэк не подменил их
+    дефолтом / прежним значением / нормализацией. Если хотим тестить
+    UI-флоу «обе модалки пропущены при пустых полях», мы обязаны
+    убедиться, что поля действительно пусты на стороне backend'а
+    ПЕРЕД тем, как открывать UI. Иначе зелёный/красный тест ничего
+    не доказывает — мы просто не знаем, что там лежит в БД.
+    """
+    fresh = api_client.get_vacancy(vacancy_id)
+
+    # Нормализация: бэк может вернуть `null` вместо пустой строки/списка.
+    # Для нашей задачи (проверить, что специализация/города пусты или
+    # совпадают строго с переданными) это эквивалент.
+    actual_spec = fresh.get("specialization") or ""
+    expected_spec = specialization or ""
+    if actual_spec != expected_spec:
+        raise AssertionError(
+            f"Backend сохранил specialization={actual_spec!r} вместо "
+            f"ожидаемого {expected_spec!r} (vacancy_id={vacancy_id}). "
+            f"Тест не может продолжаться: предусловия по полям не выполнены."
+        )
+
+    actual_cities = list(fresh.get("cities") or [])
+    expected_cities = list(cities or [])
+    if actual_cities != expected_cities:
+        raise AssertionError(
+            f"Backend сохранил cities={actual_cities!r} вместо ожидаемого "
+            f"{expected_cities!r} (vacancy_id={vacancy_id}). Тест не может "
+            f"продолжаться: предусловия по полям не выполнены."
+        )
+
+    return fresh
 
 
 # Дефолтный per-test таймаут — HH-флоу через UI многошаговый,
@@ -243,13 +289,29 @@ class TestHHExportModalsSkipFlow:
         )
 
     @pytest.fixture
-    def vacancy_empty_both(self, make_hh_test_vacancy):
-        # Пустые спец и города → обе модалки пропущены.
-        return make_hh_test_vacancy(
+    def vacancy_empty_both(self, make_hh_test_vacancy, api_client):
+        """Создаёт через API вакансию с пустыми specialization и cities,
+        затем GET'ом проверяет, что бэк действительно сохранил их
+        пустыми. Без этой post-verify шага мы не имеем права утверждать,
+        что в TC-009.10 «обе модалки пропущены при пустых полях» —
+        возможно, бэк сохранил дефолт, и модалки пропущены по другой
+        причине (или не пропущены, но мы это пропускаем из-за гонки UI).
+        """
+        vacancy = make_hh_test_vacancy(
             tag="TC009-skip-empty-both",
             specialization="",
             cities=[],
         )
+        with allure.step(
+            f"Verify backend state: spec='', cities=[] for id={vacancy['id']}"
+        ):
+            _assert_vacancy_fields(
+                api_client,
+                vacancy["id"],
+                specialization="",
+                cities=[],
+            )
+        return vacancy
 
     @allure.title(
         "TC-009.7: 1 лист-спец + 1 лист-город → обе модалки пропущены, "
@@ -299,17 +361,36 @@ class TestHHExportModalsSkipFlow:
         edit.confirm_dialog_click_no()
 
     @allure.title(
-        "TC-009.10: пустая спец + пустые города → обе модалки пропущены, "
-        "сразу подтверждение"
+        "TC-009.10: пустая спец + пустые города → сначала открывается "
+        "модалка спец-и; после её сохранения — модалка города"
     )
-    def test_both_empty_skip(self, vacancy_edit, vacancy_empty_both):
+    def test_both_empty_open_spec_then_city(
+        self, vacancy_edit, vacancy_empty_both
+    ):
+        # Поведение фронта поменялось: раньше при пустых specialization
+        # и cities обе модалки пропускались и пользователь сразу шёл
+        # в confirm-диалог. Сейчас правило проще и строже:
+        #   • если specialization пустая ИЛИ содержит >1 группы —
+        #     spec-модалка открывается;
+        #   • если cities пустые ИЛИ содержат >1 значения (и spec уже
+        #     выбрана/подтверждена) — city-модалка открывается.
+        # Для пустых spec и cities это означает строгую цепочку:
+        # click → spec-модалка → save → city-модалка.
+        # Сам экспорт по подтверждению мы не вызываем — реальная
+        # публикация на hh.ru стоит платных кредитов работодателя
+        # (см. предупреждение в шапке файла).
         edit = vacancy_edit.open_in_edit_mode(vacancy_empty_both["id"])
         edit.click_hh_export()
 
-        edit.expect_spec_modal_not_open()
+        edit.expect_spec_modal_open()
+        edit.select_it_leaf("Тестировщик")
+        edit.modal_click_save()
+
+        edit.expect_city_modal_open()
+        # Не идём дальше confirm-диалога: нам важен только сам факт
+        # появления city-модалки после выбора спец-и.
+        edit.modal_click_cancel()
         edit.expect_city_modal_not_open()
-        edit.expect_confirm_dialog_open()
-        edit.confirm_dialog_click_no()
 
 
 # =============================================================================

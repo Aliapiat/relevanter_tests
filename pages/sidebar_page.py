@@ -19,7 +19,15 @@ class SidebarPage(BasePage):
     VACANCY_ITEM = ".flex-1.overflow-y-auto [role='button']"
 
     # ── Профиль ──
+    # Старый общий локатор оставляем для обратной совместимости.
     PROFILE_BUTTON = "button:has(.rounded-full)"
+    # Кнопка профиля внизу сайдбара (SidebarUserProfile). Сужаем
+    # селектор до конкретной комбинации классов, чтобы не зацепить
+    # другие кнопки с круглыми аватарками (например, в шапке
+    # списков и в карточках вакансий).
+    USER_PROFILE_BUTTON = (
+        "button.bg-\\[\\#F5F6F1\\].rounded-xl:has(.rounded-full)"
+    )
 
     def should_be_loaded(self):
         """Проверяет что сайдбар загружен"""
@@ -72,3 +80,20 @@ class SidebarPage(BasePage):
             f"{self.VACANCY_ITEM}:has(span:has-text('{title}'))"
         ).first.click()
         return self
+
+    def click_user_profile(self):
+        """Кликает по кнопке профиля внизу сайдбара (SidebarUserProfile).
+        По клику фронт делает navigate('/recruiter/control?tab=personal')
+        — попадаем в личный кабинет / страницу «Управление».
+        """
+        self.page.locator(self.USER_PROFILE_BUTTON).first.click()
+        return self
+
+    def get_user_profile_email(self) -> str:
+        """Возвращает email, отображаемый в плашке профиля внизу
+        сайдбара. Полезно для cross-проверки того, что в этом UI
+        авторизован именно тот пользователь, под которым мы
+        логинились (рекрутёр vs админ)."""
+        return self.page.locator(
+            f"{self.USER_PROFILE_BUTTON} div.text-\\[12px\\]"
+        ).first.inner_text().strip()

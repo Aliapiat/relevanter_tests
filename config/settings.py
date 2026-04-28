@@ -27,6 +27,11 @@ class Settings:
     DEFAULT_TIMEOUT: int = int(os.getenv("DEFAULT_TIMEOUT", "30000"))
     HEADLESS: bool = os.getenv("HEADLESS", "true").lower() == "true"
     SLOW_MO: int = int(os.getenv("SLOW_MO", "0"))
-    BROWSER: str = os.getenv("BROWSER", "chromium")
+    # Browser жёстко зашит как Chromium: в browser_type_launch_args
+    # (tests/conftest.py) `channel` не задаётся, поэтому Playwright
+    # запускает свой bundled Chromium вне зависимости от env. Раньше
+    # здесь была переменная BROWSER из .env, но она читалась только
+    # для Allure environment.properties и могла вводить в заблуждение
+    # ("Browser: chrome" в отчёте при том, что реально работал Chromium).
 
 settings = Settings()

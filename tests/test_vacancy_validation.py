@@ -15,9 +15,28 @@ TOTAL_MAX = 9911 #(Если три поля -- 9911, если два -- 9939)
 TITLE_MIN = 1
 TITLE_MAX = 100
 
+# Префикс, по которому сессионная очистка узнаёт «свои» вакансии.
+# Должен совпадать с _CLEANUP_PREFIXES в tests/conftest.py.
+TITLE_PREFIX = "ALIQATEST"
+
 
 def text_of_length(length: int, char: str = "А") -> str:
     return char * length
+
+
+def title_of_length(length: int, char: str = "А") -> str:
+    """Возвращает строку нужной длины, начинающуюся с TITLE_PREFIX
+    (когда влезает). Контракт: длина результата всегда == length.
+
+    Если запрошенная длина меньше длины префикса (например,
+    тест-кейс на TITLE_MIN=1), префикс физически не помещается —
+    возвращаем строку без префикса. В этом случае вызывающий тест
+    ОБЯЗАН использовать `cleanup_vacancies_by_id`, иначе вакансия
+    останется на стенде после прогона (см. tests/conftest.py).
+    """
+    if length < len(TITLE_PREFIX):
+        return char * length
+    return TITLE_PREFIX + char * (length - len(TITLE_PREFIX))
 
 
 # ═══════════════════════════════════════════════════
@@ -32,21 +51,40 @@ class TestTitleLength:
     @allure.title("Название: 1 символ (граница min)")
     @pytest.mark.vacancy
     @pytest.mark.validation
-    def test_title_min_boundary(self, auth_vacancy_create):
+    def test_title_min_boundary(
+        self, auth_vacancy_create, cleanup_vacancies_by_id
+    ):
+        # Префикс ALIQATEST не помещается в 1 символ (длина префикса 9),
+        # поэтому стандартный sweep по префиксу ALIQATEST такую вакансию
+        # не подберёт. Используем ручной cleanup_vacancies_by_id —
+        # он удалит её по id через API в teardown'е, без проверки
+        # префикса.
+        title = title_of_length(TITLE_MIN)
+        assert len(title) == TITLE_MIN
+
         auth_vacancy_create.fill_all_required_except("title")
-        auth_vacancy_create.enter_title(text_of_length(TITLE_MIN))
+        auth_vacancy_create.enter_title(title)
         auth_vacancy_create.click_create_vacancy()
 
         sidebar = SidebarPage(auth_vacancy_create.page)
-        sidebar.wait_for_vacancy_in_sidebar(text_of_length(TITLE_MIN))
+        sidebar.wait_for_vacancy_in_sidebar(title)
         titles = sidebar.get_vacancy_titles()
-        assert text_of_length(TITLE_MIN) in titles
+        assert title in titles
+
+        vid = auth_vacancy_create.get_vacancy_id_from_url()
+        if vid:
+            cleanup_vacancies_by_id.append(vid)
 
     @allure.title("Название: 100 символов (граница max)")
     @pytest.mark.vacancy
     @pytest.mark.validation
     def test_title_max_boundary(self, auth_vacancy_create):
-        title = text_of_length(TITLE_MAX)
+        # title_of_length подмешивает префикс ALIQATEST в начало —
+        # длина результата всегда ровно TITLE_MAX, граничный кейс
+        # сохраняется, а cleanup-фильтр стенда теперь её распознаёт.
+        title = title_of_length(TITLE_MAX)
+        assert len(title) == TITLE_MAX
+
         auth_vacancy_create.fill_all_required_except("title")
         auth_vacancy_create.enter_title(title)
         auth_vacancy_create.click_create_vacancy()
@@ -59,7 +97,16 @@ class TestTitleLength:
     @allure.title("Название: 101 символ (превышение max)")
     @pytest.mark.vacancy
     @pytest.mark.validation
-    def test_title_exceeds_max(self, auth_vacancy_create):
+    def test_title_exceeds_max(
+        self, auth_vacancy_create, cleanup_vacancies_by_id
+    ):
+        # 101 символ. Префикс ALIQATEST не используем — суть теста
+        # ровно в том, что вводим строку длиннее лимита и смотрим на
+        # реакцию фронта/бэка. Очистка через cleanup_vacancies_by_id —
+        # оборонительная: на dev'е был наблюдаемый случай, когда
+        # фронт не обрезал ввод, бэк принял title в 101 символ и форма
+        # всё-таки редиректнула. Вакансия оставалась на стенде, потому
+        # что префикса ALIQATEST в title не было.
         title_101 = text_of_length(TITLE_MAX + 1)
         auth_vacancy_create.fill_all_required_except("title")
         auth_vacancy_create.enter_title(title_101)
@@ -74,6 +121,10 @@ class TestTitleLength:
                 auth_vacancy_create.click_create_vacancy()
                 auth_vacancy_create.should_stay_on_create_page()
 
+        vid = auth_vacancy_create.get_vacancy_id_from_url()
+        if vid:
+            cleanup_vacancies_by_id.append(vid)
+
     @allure.title("Название: пустое")
     @pytest.mark.vacancy
     @pytest.mark.validation
@@ -86,7 +137,11 @@ class TestTitleLength:
     @pytest.mark.vacancy
     @pytest.mark.validation
     def test_title_within_range(self, auth_vacancy_create):
-        title = text_of_length(TITLE_MAX - 1)
+        # Та же логика, что в test_title_max_boundary: префикс ALIQATEST
+        # подмешан в начало title, общая длина — ровно TITLE_MAX-1.
+        title = title_of_length(TITLE_MAX - 1)
+        assert len(title) == TITLE_MAX - 1
+
         auth_vacancy_create.fill_all_required_except("title")
         auth_vacancy_create.enter_title(title)
         auth_vacancy_create.click_create_vacancy()

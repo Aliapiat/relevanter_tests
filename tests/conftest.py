@@ -175,6 +175,37 @@ def auth_sidebar(authenticated_page: Page) -> SidebarPage:
     return sidebar
 
 
+@pytest.fixture
+def authenticated_admin_page(page: Page) -> Page:
+    """Логинится под АДМИНОМ (`settings.ADMIN_EMAIL`) и возвращает
+    page в авторизованном состоянии.
+
+    По соглашению (см. README.md → «Secrets…» и docstring у
+    `authenticated_page`) админ используется ТОЛЬКО там, где роль
+    напрямую влияет на UI: тесты логина и тесты ролевой видимости
+    разделов. В частности — личный кабинет / страница `/recruiter/control`,
+    где у админа дополнительный таб «Управление аккаунтами», которого
+    нет у рекрутёра.
+
+    В отличие от `authenticated_page`, эта фикстура НЕ вешает
+    network-listener на POST /positions: админские тесты не создают
+    вакансий, и нам не нужен побочный канал в `session_registry`.
+    Это прямой второй контур защиты от случайного засорения реестра
+    при работе под админом, у которого в выборке `/positions` лежат
+    вакансии всех пользователей стенда.
+    """
+    login = LoginPage(page)
+    login.open()
+    login.login(settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD)
+
+    page.wait_for_url(
+        lambda url: "/login" not in url,
+        timeout=15000,
+    )
+    DashboardPage(page).should_be_loaded()
+    return page
+
+
 # ═══════════════════════════════════════════
 # HH-EXPORT / RELEVANCE — фикстуры подготовки данных через API
 # ═══════════════════════════════════════════
@@ -334,9 +365,18 @@ def auth_vacancy_create(authenticated_page: Page, api_client: APIClient) -> Vaca
     Авторизуется → нажимает 'Новая вакансия' →
     возвращает страницу создания вакансии.
 
-    После теста удаляет вакансию если она была создана (URL содержит ID).
-    Работает и для позитивных тестов, и для случаев когда вакансия
-    создалась неожиданно (например при невалидных данных).
+    Teardown устроен консервативно: вакансия удаляется ТОЛЬКО если
+    одновременно выполняются ТРИ условия:
+        1. id из текущего URL зарегистрирован в session_registry —
+           значит мы её создавали в этой pytest-сессии.
+        2. Заголовок начинается с тестового префикса ALIQATEST.
+        3. Заголовок не попал в PROTECTED_TITLE_SUBSTRINGS whitelist.
+
+    Если хотя бы одно условие не выполнено — фикстура НИЧЕГО не
+    удаляет, только пишет WARN в лог. Это защита от инцидента,
+    когда тест после yield успел оказаться на странице чужой
+    вакансии (через навигацию, ссылку из списка, редирект и т.п.) —
+    и teardown по сырому id из URL сносил чужое.
     """
     sidebar = SidebarPage(authenticated_page)
     sidebar.should_be_loaded()
@@ -348,13 +388,44 @@ def auth_vacancy_create(authenticated_page: Page, api_client: APIClient) -> Vaca
     yield vacancy_page
 
     vacancy_id = vacancy_page.get_vacancy_id_from_url()
-    if vacancy_id:
-        try:
-            api_client.delete_vacancy(vacancy_id)
-        except Exception as e:
-            print(f"[cleanup] Не удалось удалить вакансию id={vacancy_id}: {e}")
-            # Резервная очистка по префиксам — c защитой реальных QA-вакансий
-            _bulk_delete(api_client, "fallback")
+    if not vacancy_id:
+        return
+
+    if not session_registry.is_registered(vacancy_id):
+        print(
+            f"[cleanup] WARN: id={vacancy_id} в URL после теста, "
+            f"но не зарегистрирован в session_registry — НЕ удаляем "
+            f"(возможно, тест навигировал на чужую вакансию)."
+        )
+        return
+
+    try:
+        vacancy = api_client.get_vacancy(vacancy_id)
+        title = (vacancy or {}).get("title", "") if isinstance(vacancy, dict) else ""
+    except Exception as e:
+        print(
+            f"[cleanup] WARN: не смог получить title id={vacancy_id} "
+            f"({e}) — НЕ удаляем во избежание сноса чужого."
+        )
+        return
+
+    if not title.startswith("ALIQATEST"):
+        print(
+            f"[cleanup] WARN: id={vacancy_id} title='{title}' не начинается "
+            f"с ALIQATEST — НЕ удаляем (вероятно, чужая вакансия попала "
+            f"в URL и в реестр по ошибке)."
+        )
+        return
+
+    if _is_protected(title):
+        print(f"[cleanup] SKIP id={vacancy_id} '{title}' (protected whitelist)")
+        return
+
+    try:
+        api_client.delete_vacancy(vacancy_id)
+        session_registry.unregister(vacancy_id)
+    except Exception as e:
+        print(f"[cleanup] Не удалось удалить вакансию id={vacancy_id}: {e}")
 
 
 # ═══════════════════════════════════════════
@@ -633,6 +704,44 @@ def session_vacancy_cleanup(api_client: APIClient):
     _bulk_delete(api_client, "before-session")
     yield
     _bulk_delete(api_client, "after-session")
+
+
+@pytest.fixture
+def cleanup_vacancies_by_id(api_client: APIClient):
+    """Точечная очистка вакансий по id, БЕЗ проверки префикса title.
+
+    Использовать ТОЛЬКО там, где префикс ALIQATEST физически не
+    помещается в title — например, тест граничной минимальной
+    длины названия в 1 символ. Для всех остальных тестов основной
+    канал очистки — префикс ALIQATEST + session_registry; не
+    размывайте эту защиту без явной причины.
+
+    Использование::
+
+        def test_title_min(self, auth_vacancy_create, cleanup_vacancies_by_id):
+            auth_vacancy_create.enter_title("А")
+            auth_vacancy_create.click_create_vacancy()
+            ...
+            vid = auth_vacancy_create.get_vacancy_id_from_url()
+            if vid:
+                cleanup_vacancies_by_id.append(vid)
+
+    После teardown'а:
+        • вакансия удалена через DELETE /api/v1/positions/{id};
+        • id удалён из session_registry, чтобы фикстура
+          `auth_vacancy_create` в своём teardown увидела «не наш»
+          и тихо вышла, а сессионный sweep не считал лишних
+          «foreign-вакансий».
+    """
+    ids: list[int] = []
+    yield ids
+    for vid in ids:
+        try:
+            api_client.delete_vacancy(vid)
+        except Exception as e:
+            print(f"[cleanup_by_id] не удалось удалить id={vid}: {e}")
+        finally:
+            session_registry.unregister(vid)
 
 
 @pytest.fixture
