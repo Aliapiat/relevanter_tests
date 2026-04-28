@@ -1,0 +1,3 @@
+
+🔗 Target: prod → https://app.relevanter.ru/
+[cleanup before-session] session_registry пуст — пропускаем

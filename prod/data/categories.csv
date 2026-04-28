@@ -1,0 +1,5 @@
+"BROKEN","CATEGORY","FAILED","PASSED","SKIPPED","UNKNOWN"
+"69","Playwright timeouts (flaky/infra)","0","0","0","0"
+"65","Element not found / selector issues","0","0","0","0"
+"16","Network / HTTP errors","0","0","0","0"
+"16","Test infrastructure (fixtures / setup)","0","0","0","0"
