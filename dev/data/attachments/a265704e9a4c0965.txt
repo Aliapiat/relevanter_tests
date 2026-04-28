@@ -1,0 +1,7 @@
+[cleanup after-session] SKIP 6 вакансий с префиксом ALIQATEST, которые не создавались в этой сессии (не удаляем чужое): [3078, 3079, 3081, 3083, 3085, 3086]
+[cleanup after-session] удалена id=3074 'ALIQATEST_SearchFilter_8497' → 204
+[cleanup after-session] удалена id=3075 'ALIQATEST_SearchFilter_1900' → 204
+[cleanup after-session] удалена id=3076 'ALIQATEST_SearchFilter_3932' → 204
+[cleanup after-session] удалена id=3077 'ALIQATEST_SearchFilter_9677' → 204
+[cleanup after-session] удалена id=3080 'ALIQATEST_SearchFilter_9042' → 204
+[cleanup after-session] итого: удалено 5, пропущено по whitelist 0, чужих пропущено 6
