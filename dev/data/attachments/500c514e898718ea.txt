@@ -1,0 +1,7 @@
+[cleanup after-session] в реестре есть id [2893, 2894], но сервер уже не отдаёт их по префиксу — вероятно, тест удалил их сам. Чистим из реестра.
+[cleanup after-session] удалена id=2886 'ALIQATEST_SearchFilter_7382' → 204
+[cleanup after-session] удалена id=2887 'ALIQATEST_SearchFilter_3901' → 204
+[cleanup after-session] удалена id=2888 'ALIQATEST_SearchFilter_9754' → 204
+[cleanup after-session] удалена id=2889 'ALIQATEST_SearchFilter_2114' → 204
+[cleanup after-session] удалена id=2890 'ALIQATEST_SearchFilter_4936' → 204
+[cleanup after-session] итого: удалено 5, пропущено по whitelist 0, чужих пропущено 0

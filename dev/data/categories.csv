@@ -1,4 +1,4 @@
 "BROKEN","CATEGORY","FAILED","PASSED","SKIPPED","UNKNOWN"
+"2","Element not found / selector issues","4","0","0","0"
 "0","Product defects — AssertionError","4","0","0","0"
-"1","Element not found / selector issues","2","0","0","0"
-"1","Playwright timeouts (flaky/infra)","0","0","0","0"
+"2","Playwright timeouts (flaky/infra)","0","0","0","0"
