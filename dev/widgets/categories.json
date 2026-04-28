@@ -1,1 +1,1 @@
-{"total":0,"items":[]}
+{"total":2,"items":[{"uid":"f78a891596e8ea4e1be5716bc4b536fb","name":"Element not found / selector issues","statistic":{"failed":1,"broken":0,"skipped":0,"passed":0,"unknown":0,"total":1}},{"uid":"5e9c1c3c7d11c8bee51987bda67d8399","name":"Product defects — AssertionError","statistic":{"failed":1,"broken":0,"skipped":0,"passed":0,"unknown":0,"total":1}}]}

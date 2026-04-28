@@ -1,0 +1,6 @@
+[cleanup after-session] удалена id=3091 'ALIQATEST_SearchFilter_9831' → 204
+[cleanup after-session] удалена id=3092 'ALIQATEST_SearchFilter_7937' → 204
+[cleanup after-session] удалена id=3093 'ALIQATEST_SearchFilter_4540' → 204
+[cleanup after-session] удалена id=3094 'ALIQATEST_SearchFilter_3859' → 204
+[cleanup after-session] удалена id=3095 'ALIQATEST_SearchFilter_3114' → 204
+[cleanup after-session] итого: удалено 5, пропущено по whitelist 0, чужих пропущено 0

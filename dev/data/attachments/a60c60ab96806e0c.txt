@@ -1,0 +1,16 @@
+[cleanup after-session] удалена id=3101 'ALIQATEST_SearchFilter_2741' → 204
+[cleanup after-session] удалена id=3102 'ALIQATEST_SearchFilter_3466' → 204
+[cleanup after-session] удалена id=3103 'ALIQATEST_SearchFilter_8724' → 204
+[cleanup after-session] удалена id=3134 'ALIQATEST_Дисплей_4323' → 204
+[cleanup after-session] удалена id=3135 'ALIQATEST_Дисплей_6562' → 204
+[cleanup after-session] удалена id=3136 'ALIQATEST_Дисплей_3706' → 204
+[cleanup after-session] удалена id=3137 'ALIQATEST_Дисплей_2008' → 204
+[cleanup after-session] удалена id=3138 'ALIQATEST_Дисплей_5478' → 204
+[cleanup after-session] удалена id=3139 'ALIQATEST_Дисплей_4655' → 204
+[cleanup after-session] удалена id=3140 'ALIQATEST_Дисплей_6568' → 204
+[cleanup after-session] удалена id=3141 'ALIQATEST_Дисплей_8047' → 204
+[cleanup after-session] удалена id=3142 'ALIQATEST_Дисплей_4889' → 204
+[cleanup after-session] удалена id=3143 'ALIQATEST_Дисплей_7793' → 204
+[cleanup after-session] удалена id=3171 'ALIQATEST_Tabs_1085' → 204
+[cleanup after-session] удалена id=3172 'ALIQATEST_Tabs_8941' → 204
+[cleanup after-session] итого: удалено 15, пропущено по whitelist 0, чужих пропущено 0
