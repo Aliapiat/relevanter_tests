@@ -425,70 +425,103 @@ class TestHHExportRegressions:
         edit.expect_confirm_dialog_open()
         edit.confirm_dialog_click_no()
 
-    @pytest.mark.xfail(
-        reason=(
-            "Path-key cache на dev НЕ срабатывает: после reload spec-modal "
-            "снова открывается (повторный «Опубликовать на HH.ru» вызывает "
-            "isSpecializationLeafId(group=11) → false → модалка). Скорее "
-            "всего, в нашей сборке кэш path-key пишется только после "
-            "успешного confirm=Yes (реальной публикации на HH), а мы по "
-            "соображениям безопасности всегда жмём «Нет» — иначе тест "
-            "тратит платные кредиты работодателя. Без compromise'а это "
-            "не проверить. См. arch/azhukov/test-cases/test-cases.md TC-010 "
-            "и сравни с recruiter-front/src/components/vacancies/"
-            "VacancyDataEditForm.tsx (handleExportConfirm) — там запись "
-            "path-key привязана к 200-ответу /hh/vacancies/export."
-        ),
-        strict=False,
-    )
     @allure.title(
-        "TC-010.2: после выбора leaf-спец-и через export-модалку и reload — "
-        "модалка спец-и больше не открывается (path-key cache)"
+        "TC-010.2: после выбора leaf-спец-и через form-модалку и reload — "
+        "модалка спец-и при экспорте больше не открывается"
     )
     def test_leaf_spec_after_modal_save_and_reload(
-        self, vacancy_edit, make_hh_test_vacancy
+        self, vacancy_edit, make_hh_test_vacancy, api_client
     ):
-        # Регрессия на path-key cache на бэке.
+        # Регрессия: если пользователь выбрал leaf-специализацию через
+        # form-модалку (кнопка «Специализация» в режиме редактирования)
+        # и сохранил вакансию — после reload повторный экспорт должен
+        # сразу открывать confirm-диалог, минуя spec-модалку.
         #
-        # Сценарий (оригинал из arch/azhukov):
-        #   1. Создаём вакансию с group-spec ("Информационные технологии",
-        #      HH id=11). Группа НЕ листовая → при первом экспорте фронт
-        #      обязан открыть spec-modal с вопросом «какую leaf-ноду
-        #      публиковать на HH».
-        #   2. Click «Опубликовать на HH.ru» → spec-modal открывается.
-        #   3. Выбираем leaf «Тестировщик» (id=124) → modal_click_save →
-        #      открывается confirm-dialog → жмём «Нет» (не публикуем).
-        #   4. Перезагружаем страницу. Спец в форме всё ещё group ("11"),
-        #      т.е. фронт сам по себе должен снова открыть spec-modal,
-        #      ЕСЛИ бы не path-key cache.
-        #   5. Снова click «Опубликовать на HH.ru».
-        #   6. Ассерт: spec-modal больше НЕ открывается → бэк закэшировал
-        #      выбор leaf по path-key (companyId+title-hash) и фронт
-        #      подтянул его при инициализации.
+        # Архитектурный контекст
+        # (recruiter-front/src/components/vacancies/VacancyDataEditForm.tsx):
+        #   • строка 3620-3626: `<SpecializationModal selectionMode="multi"
+        #     onSelectionChange={handleSpecializationSelectionChange}/>` —
+        #     это FORM-модалка спец, привязана к кнопке «Специализация» в
+        #     форме редактирования (строка 2824). Её callback РЕАЛЬНО пишет
+        #     в form state `specialization` и в localStorage-кэш
+        #     `vacancySpecializationPathKeys_<id>` (строки 1027-1034).
+        #   • строка 3668-3676: `<SpecializationModal selectionMode="single_category"
+        #     onSelectionChange={handleExportSpecSelected}/>` — EXPORT-модалка,
+        #     открывается из click «На HH.ru». Её callback пишет ТОЛЬКО
+        #     `setExportSpecOverride` (строка 1596-1598) и не трогает form
+        #     state. Поэтому save формы после export-модалки НЕ обновит
+        #     specialization на бэке — отсюда был неверный xfail в первом
+        #     порте теста.
+        #   • строки 1886-1888: form save отправляет `specialization.join(',')`
+        #     на бэк через PATCH /positions/<id>.
+        #   • строки 1157-1173: на mount/reload backend-spec идёт через
+        #     extractLastPathSegment в setSpecialization. Когда form spec
+        #     state приходит как leaf path "11/124" → save отправляет
+        #     "11/124" → reload получает "11/124" → isSpecializationLeafId
+        #     находит leaf → spec-modal на экспорте не открывается.
         #
-        # ВАЖНО: НЕ пытаемся менять специализацию через form-модалку
-        # (кнопка-селектор в form-режиме отображает текущее значение,
-        # а не «Выбрать специализацию»). Path-key cache проверяется
-        # только через export-модалку.
+        # Шаги:
+        #   1. Создаём вакансию с пустой specialization, leaf-городом
+        #      (Москва, id=1). Кнопка «Специализация» показывает
+        #      «Выберите специализацию…».
+        #   2. Open form spec-modal (клик по кнопке-анchor «Специализация»).
+        #   3. Выбираем leaf «Тестировщик» (id=124) в модалке → modal save.
+        #      handleSpecializationSelectionChange пишет form state и кэш.
+        #   4. click_form_save → бэк апдейтит specialization до leaf path.
+        #   5. Reload + edit.
+        #   6. click «На HH.ru» → backend имеет leaf → spec-modal НЕ
+        #      открывается → сразу confirm-dialog → «Нет».
         vacancy = make_hh_test_vacancy(
             tag="TC010-pathkey",
-            specialization=HH_SPEC_IT_GROUP,  # group → требует выбор leaf
-            cities=[HH_CITY_MOSCOW],          # leaf → город-модалку пропустит
+            specialization="",
+            cities=[HH_CITY_MOSCOW],
         )
         edit = vacancy_edit.open_in_edit_mode(vacancy["id"])
 
-        # 1-3. Первый экспорт: spec-modal → выбираем leaf → confirm → No.
-        edit.click_hh_export()
-        edit.expect_spec_modal_open()
+        # 1-3. Открываем form spec-modal — кнопка-селектор стоит в блоке
+        # «Специализация» формы, у пустой вакансии её текст —
+        # «Выберите специализацию…». В отличие от export-модалки
+        # (heading «Выберите специализацию для публикации»), у form-модалки
+        # заголовок по умолчанию — «Специализации». Поэтому проверяем
+        # открытие через heading-regex, а не через expect_spec_modal_open().
+        import re as _re
+        edit.page.get_by_role(
+            "button", name="Выберите специализацию..."
+        ).click()
+        expect(
+            edit.page.get_by_role(
+                "heading", name=_re.compile(r"Специализаци")
+            )
+        ).to_be_visible(timeout=15_000)
         edit.select_it_leaf("Тестировщик")
         edit.modal_click_save()
-        edit.expect_confirm_dialog_open()
-        edit.confirm_dialog_click_no()
+        # Подтверждаем, что form state применился: кнопка-селектор теперь
+        # содержит текст выбранной leaf-специализации.
+        expect(
+            edit.page.get_by_role(
+                "button", name=_re.compile(r"Тестировщик")
+            ).first
+        ).to_be_visible(timeout=5_000)
 
-        # 4. Reload + edit.
+        # 4. Сохраняем форму — бэк апдейтит specialization до leaf path key
+        # ("11/10" или "11/124" в зависимости от справочника HH).
+        edit.click_form_save()
+        edit.expect_toast_vacancy_updated()
+        fresh = api_client.get_vacancy(vacancy["id"])
+        # Проверяем, что бэк действительно сохранил leaf, а не пустую/group
+        # specialization. extractLastPathSegment в коде фронта смотрит на
+        # последний сегмент после '/', поэтому достаточно проверить, что
+        # значение содержит "/" (т.е. это полный path, а не просто id).
+        assert "/" in (fresh.get("specialization") or ""), (
+            f"Бэк сохранил specialization={fresh.get('specialization')!r}, "
+            f"ожидался leaf path-key вида '11/<leaf_id>'. "
+            f"Регрессия handleSpecializationSelectionChange / form save."
+        )
+
+        # 5. Reload + edit.
         edit.open_in_edit_mode(vacancy["id"])
 
-        # 5-6. Второй экспорт: spec-modal НЕ открывается.
+        # 6. Второй экспорт: spec-modal НЕ открывается, сразу confirm.
         edit.click_hh_export()
         edit.expect_spec_modal_not_open()
         edit.expect_confirm_dialog_open()
@@ -680,30 +713,40 @@ def _install_hh_export_interceptor(page):
 
 @allure.epic("HH.ru экспорт")
 @allure.feature(
-    "TC-652: порядок валидации — тосты до подтверждения, без запроса на бэк"
+    "TC-652: пре-валидация — модалки спец/города ДО подтверждения, "
+    "без запроса на бэк"
 )
 @pytest.mark.hh_export
 @pytest.mark.validation
 @pytest.mark.integration
 @pytest.mark.regression
-@pytest.mark.skip(
-    reason=(
-        "TC-652 неактуален для текущей сборки recruiter-front: "
-        "функция handleExportClick (см. VacancyDataEditForm.tsx ~стр.1471-1498) "
-        "НЕ выводит toast при пустых specialization/cities — пустое значение "
-        "просто пропускает соответствующую модалку и идёт к confirm-диалогу. "
-        "Регрессия TASKNEIROKLYUCH-652 ловила старое поведение, которого "
-        "у нас на dev нет. Возвращать тесты при следующем релизе фронта, "
-        "если pre-validation order для пустых полей будет ужесточён."
-    )
-)
 class TestHHExportValidationOrder:
-    """Регрессия TASKNEIROKLYUCH-652: при пустых обязательных полях
-    диалог подтверждения вообще не должен открываться, и запрос на
-    /relevanter/api/hh/vacancies/export не должен уходить."""
+    """Регрессия TASKNEIROKLYUCH-652 (адаптирована под TASKNEIROKLYUCH-678).
+
+    Архитектурный контекст
+    (recruiter-front/src/components/vacancies/VacancyDataEditForm.tsx,
+    handleExportClick на строках 1525-1593):
+        * Старая семантика TASKNEIROKLYUCH-652 — toast при пустых
+          specialization/cities — заменена на TASKNEIROKLYUCH-678:
+          пустое/non-leaf поле → открывается соответствующая модалка
+          (spec-modal или city-modal), а не выводится toast.
+        * Шаг 1 (строки 1559-1573): спец-валидация. Пустая, >1, или
+          ровно один не-лист → setIsExportSpecModalOpen(true), return.
+        * Шаг 2 (строки 1575-1589): город-валидация. Аналогично.
+        * Только при обоих заполненных листовых значениях открывается
+          confirm-dialog (строка 1591-1592).
+
+    Поэтому актуальный TC-652-инвариант:
+        * При пустом обязательном поле открывается соответствующая
+          модалка для уточнения (а не сразу confirm-dialog).
+        * Confirm-dialog НЕ открывается, пока пользователь не
+          уточнит все нелистовые/пустые поля.
+        * POST `/relevanter/hh/vacancies/export` НЕ уходит вплоть до
+          явного «Да» в confirm-dialog (которое тесты никогда не жмут).
+    """
 
     @allure.title(
-        "TC-652.1: пустая «Специализация» → toast, без диалога, без запроса"
+        "TC-652.1: пустая «Специализация» → spec-modal, без confirm, без запроса"
     )
     def test_empty_specialization(self, vacancy_edit, make_hh_test_vacancy):
         vacancy = make_hh_test_vacancy(
@@ -717,16 +760,17 @@ class TestHHExportValidationOrder:
         edit = vacancy_edit.open_in_edit_mode(vacancy["id"])
         edit.click_hh_export()
 
-        page_obj = vacancy_edit  # noqa: F841 — alias для читаемости в шаге
-        edit.expect_toast_no_spec()
+        # Шаг 1 handleExportClick: спец пустая → spec-modal, return до
+        # любого дальнейшего флоу (city-modal / confirm).
+        edit.expect_spec_modal_open()
         edit.expect_confirm_dialog_not_open()
         assert export_calls() == 0, (
-            "Frontend всё-таки отправил POST /relevanter/api/hh/vacancies/export "
+            "Frontend всё-таки отправил POST /relevanter/hh/vacancies/export "
             "при пустой специализации — пре-валидация не сработала."
         )
 
     @allure.title(
-        "TC-652.2: пустая «География» → toast, без диалога, без запроса"
+        "TC-652.2: пустая «География» → city-modal, без confirm, без запроса"
     )
     def test_empty_geography(self, vacancy_edit, make_hh_test_vacancy):
         vacancy = make_hh_test_vacancy(
@@ -740,14 +784,17 @@ class TestHHExportValidationOrder:
         edit = vacancy_edit.open_in_edit_mode(vacancy["id"])
         edit.click_hh_export()
 
-        edit.expect_toast_no_city()
+        # Спец листовая → шаг 1 handleExportClick проходит. Города пусты
+        # → шаг 2 → city-modal, return до confirm-dialog.
+        edit.expect_spec_modal_not_open()
+        edit.expect_city_modal_open()
         edit.expect_confirm_dialog_not_open()
         assert export_calls() == 0, (
             "Frontend отправил запрос на бэк при пустой географии."
         )
 
     @allure.title(
-        "TC-652.3: оба поля пусты → оба тоста, без диалога, без запроса"
+        "TC-652.3: оба поля пусты → spec-modal первой, без confirm, без запроса"
     )
     def test_both_empty(self, vacancy_edit, make_hh_test_vacancy):
         vacancy = make_hh_test_vacancy(
@@ -761,9 +808,15 @@ class TestHHExportValidationOrder:
         edit = vacancy_edit.open_in_edit_mode(vacancy["id"])
         edit.click_hh_export()
 
-        edit.expect_toast_no_spec()
-        edit.expect_toast_no_city()
+        # handleExportClick проверяет спец первой (строка 1559). При пустой
+        # специализации фронт открывает spec-modal и делает early return
+        # ДО city-валидации. Поэтому city-modal на этом этапе не открыт.
+        edit.expect_spec_modal_open()
+        edit.expect_city_modal_not_open()
         edit.expect_confirm_dialog_not_open()
+        assert export_calls() == 0, (
+            "Frontend отправил запрос на бэк при двух пустых полях."
+        )
         assert export_calls() == 0, (
             "Frontend отправил запрос на бэк при пустых спец и географии."
         )

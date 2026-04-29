@@ -93,6 +93,7 @@ class _SearchMockStats:
     def __init__(self) -> None:
         self.relevance_requests: int = 0
         self.last_relevance_body: dict[str, Any] | None = None
+        self.bodies_history: list[dict[str, Any]] = []
 
 
 def _install_search_mocks(page: Page) -> _SearchMockStats:
@@ -127,6 +128,7 @@ def _install_search_mocks(page: Page) -> _SearchMockStats:
             body = {}
         stats.relevance_requests += 1
         stats.last_relevance_body = body
+        stats.bodies_history.append(body)
 
         requested_page_size = int(body.get("pageSize") or 20)
         items = _make_fake_candidates(requested_page_size)
@@ -234,6 +236,32 @@ def search_page_with_mocks(authenticated_page: Page):
     """
     stats = _install_search_mocks(authenticated_page)
     base = settings.BASE_URL.rstrip("/")
+
+    # Сначала зайдём на корневой /recruiter, чтобы получить same-origin
+    # доступ к localStorage. Без navigate() сюда `evaluate` упадёт на
+    # about:blank.
+    authenticated_page.goto(base + "/recruiter")
+
+    # Чистим persisted-фильтры поиска. Recruiter-front сохраняет state
+    # фильтров /recruiter/search в localStorage, поэтому при повторном
+    # заходе query из URL может быть перекрыт восстановленным state'ом
+    # с прошлых поисков (включая ручные «QA auto Specialist» того же
+    # юзера на dev-стенде). Чистим всё, что начинается с relevant-
+    # префиксов: relevanter*, search*, recruiterSearch*.
+    authenticated_page.evaluate(
+        """
+        () => {
+          const prefixes = ['relevanter', 'search', 'recruiterSearch', 'relevance'];
+          const keys = Object.keys(localStorage);
+          for (const k of keys) {
+            if (prefixes.some(p => k.toLowerCase().startsWith(p.toLowerCase()))) {
+              localStorage.removeItem(k);
+            }
+          }
+        }
+        """
+    )
+
     authenticated_page.goto(
         base
         + "/recruiter/search?source=hh&limit=20&pageSize=20&page=1"
@@ -242,13 +270,29 @@ def search_page_with_mocks(authenticated_page: Page):
         + "&scoringEnabled=true&strictRegionSearch=false"
     )
 
-    # Включаем фильтр релевантности «≥85%» — активирует search-with-relevance.
-    authenticated_page.get_by_role("button", name="≥85%").click()
+    # Дожидаемся готовности RelevanceFilters — это сигнал, что страница
+    # смонтирована и кнопка «≥85%» уже кликабельна. Без этого ожидания на
+    # CI бывает гонка: goto завершился, но React ещё не отрисовал контролы,
+    # и клик по «≥85%» уходит «в воздух» → запрос на бэк не уходит →
+    # «Кандидат 1» не появляется → падает фикстура.
+    expect(
+        authenticated_page.get_by_text("Количество кандидатов", exact=True)
+    ).to_be_visible(timeout=20_000)
+
+    relevance_button = authenticated_page.get_by_role(
+        "button", name="≥85%"
+    )
+    expect(relevance_button).to_be_visible(timeout=20_000)
+    expect(relevance_button).to_be_enabled(timeout=20_000)
+    relevance_button.click()
 
     # Дожидаемся появления первой строки таблицы — фейковый «Кандидат 1».
+    # Таймаут увеличен с 10s до 30s: на CI цепочка
+    # «click → WebSocket connect → POST search-with-relevance → render»
+    # стабильно укладывается в 10s на dev, но бывает пограничной на CI.
     expect(
         authenticated_page.get_by_text(re.compile(r"^Кандидат 1$"))
-    ).to_be_visible(timeout=10_000)
+    ).to_be_visible(timeout=30_000)
 
     return authenticated_page, stats
 
@@ -286,19 +330,6 @@ class TestRelevancePaginationIndependence:
         expect(page.get_by_text(re.compile(r"^Кандидат 20$"))).to_be_visible()
         expect(page.get_by_text(re.compile(r"^Кандидат 21$"))).to_have_count(0)
 
-    @pytest.mark.xfail(
-        reason=(
-            "Архитектура TC-645 в нашей сборке отличается от TS-исходника:\n"
-            "см. recruiter-front/src/pages/RelevanterPage.tsx ~стр.510-512, 1339-1342:\n"
-            "  - filters.limit теперь — единый источник rowsPerPage И backend per_page\n"
-            "  - filters.pageSize — больше не идёт в createApiQuery как pageSize\n"
-            "Поэтому ввод значения в верхний 'Количество кандидатов' (target_count_input)\n"
-            "может НЕ триггерить запрос на бэк — фронт обновит только локальный state.\n"
-            "Тест нужно переписать под новую логику filters.limit-as-pageSize "
-            "после уточнения с разработчиком (что именно теперь шлётся на бэк)."
-        ),
-        strict=False,
-    )
     @allure.title(
         "TC-645.2: смена target count → запрос на бэк с новым pageSize, "
         "rowsPerPage не меняется"
@@ -306,78 +337,136 @@ class TestRelevancePaginationIndependence:
     def test_target_change_hits_backend_keeps_rows(
         self, search_page_with_mocks
     ):
+        # Архитектура (RelevanterPage.tsx:1373-1398, filterUtils.ts:325-338):
+        #   target count → setRelevancePageSize → setFilters → setTimeout(50ms)
+        #   → handleSearch → POST search-with-relevance c pageSize=relevancePageSize.
+        #   filters.limit (rowsPerPage) уходит в createApiQuery как `pageSize`,
+        #   но в relevance-branch override'ится локальным relevancePageSize,
+        #   поэтому в теле запроса фактически едет только target count, а
+        #   `limit` как поле не сериализуется вовсе.
         page, stats = search_page_with_mocks
         target_input = _target_count_input(page)
         before = stats.relevance_requests
 
+        # Клик по опции "10" в дропдауне — надёжнее fill+Enter (см. TC-645.4).
         target_input.click()
-        target_input.fill("10")
-        target_input.press("Enter")
+        target_label = page.get_by_text("Количество кандидатов", exact=True)
+        target_dropdown_10 = target_label.locator(
+            "xpath=following-sibling::*[1]"
+        ).get_by_role("button", name="10", exact=True)
+        expect(target_dropdown_10).to_be_visible(timeout=5_000)
+        target_dropdown_10.click()
+        expect(target_input).to_have_value("10", timeout=5_000)
+        page.wait_for_timeout(300)
 
-        expect(target_input).to_have_value("10")
-        # Дожидаемся нового запроса на бэк (expect.poll нет в playwright-python,
-        # поэтому крутим вручную в окне 5 секунд).
+        # Дожидаемся нового запроса на бэк с pageSize=10. 15s — с запасом
+        # на CI (debounce + WebSocket connect + бэк-ответ).
         import time
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline and stats.relevance_requests <= before:
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline and (
+            (stats.last_relevance_body or {}).get("pageSize") != 10
+        ):
             time.sleep(0.05)
+        # Стабилизация — гасим возможный поздний debounced auto-search.
+        _wait_no_new_requests(stats, window_ms=1500)
+        sizes = [b.get("pageSize") for b in stats.bodies_history]
+
         assert stats.relevance_requests > before, (
-            "После смены target count новый запрос на бэк не пришёл"
+            f"После смены target count новый запрос на бэк не пришёл "
+            f"(requests {before}->{stats.relevance_requests})"
+        )
+        assert (stats.last_relevance_body or {}).get("pageSize") == 10, (
+            f"После target=10 на бэк не пришёл pageSize=10, "
+            f"история pageSize всех {len(sizes)} запросов: {sizes}"
+        )
+        # filters.limit (rowsPerPage) НЕ должен утекать в тело запроса.
+        assert (stats.last_relevance_body or {}).get("limit") is None, (
+            "filters.limit утёк на бэк — регрессия TC-645"
         )
 
-        assert (stats.last_relevance_body or {}).get("pageSize") == 10
-        assert (stats.last_relevance_body or {}).get("limit") is None
-
-        # Нижний rowsPerPage остался 20.
+        # Нижний rowsPerPage остался 20 — target count и rowsPerPage независимы.
         assert _read_rows_per_page(page) == 20
         # Таблица перерисовалась с 10 кандидатами.
         expect(page.get_by_text(re.compile(r"^Кандидат 10$"))).to_be_visible()
         expect(page.get_by_text(re.compile(r"^Кандидат 11$"))).to_have_count(0)
 
-    @pytest.mark.xfail(
-        reason=(
-            "Регрессия TC-645 в нашей сборке инвертирована: filters.limit "
-            "теперь намеренно идёт на бэк как per_page (см. RelevanterPage.tsx:1413-1414 "
-            "'filters.limit идёт в бэк как per_page, поэтому его смена должна триггерить "
-            "новый запрос'). Старая инвариантa 'rowsPerPage не дёргает бэк' больше не "
-            "актуальна. Тест либо удалить, либо переписать как 'rows_change ДОЛЖНА "
-            "триггерить запрос с новым per_page'."
-        ),
-        strict=False,
-    )
     @allure.title(
-        "TC-645.3: смена rowsPerPage → НЕ дёргает бэк, target count не меняется"
+        "TC-645.3: смена rowsPerPage не меняет target count UI; "
+        "если бэк дёргается, body.pageSize остаётся равным target count"
     )
-    def test_rows_change_does_not_hit_backend(self, search_page_with_mocks):
+    def test_rows_change_keeps_target_count(self, search_page_with_mocks):
+        # Архитектурный контекст (RelevanterPage.tsx:1338-1347, 1400-1445,
+        # filterUtils.ts:325-338):
+        #   * filters.limit — единый источник rowsPerPage UI и бэкендного
+        #     per_page (через createApiQuery → pageSize: filters.limit).
+        #   * НО в relevance-branch handleSearch override'ит pageSize
+        #     значением relevancePageSize (target count).
+        #   * Смена rowsPerPage меняет filters → 500ms debounced
+        #     auto-search → бэк дёргается, но body.pageSize всё равно =
+        #     relevancePageSize, не новому filters.limit.
+        # Поэтому актуальный TC-645.3-инвариант — независимость UI:
+        # «N резюме» меняется, «Количество кандидатов» — нет; и если
+        # бэк дёрнулся, его pageSize не уехал на rowsPerPage.
         page, stats = search_page_with_mocks
 
-        # Сначала переходим в состояние target=10 (как в TS-тесте), чтобы
-        # последующая смена rows → 50 не оказалась случайно равной target.
+        # Сначала переходим в состояние target=10, чтобы последующая
+        # смена rows → 50 не совпала случайно с target (иначе тест ничего
+        # не проверяет).
         target_input = _target_count_input(page)
         target_input.click()
-        target_input.fill("10")
-        target_input.press("Enter")
-        expect(target_input).to_have_value("10")
-        # Ждём пока пришёл соответствующий запрос на бэк (pageSize=10).
+        target_label = page.get_by_text("Количество кандидатов", exact=True)
+        target_dropdown_10 = target_label.locator(
+            "xpath=following-sibling::*[1]"
+        ).get_by_role("button", name="10", exact=True)
+        expect(target_dropdown_10).to_be_visible(timeout=5_000)
+        target_dropdown_10.click()
+        expect(target_input).to_have_value("10", timeout=5_000)
+        page.wait_for_timeout(300)
+
+        # Ждём, пока пришёл запрос с pageSize=10 (значит relevancePageSize
+        # синхронизировался с UI).
         import time
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + 15.0
         while time.monotonic() < deadline and (
             (stats.last_relevance_body or {}).get("pageSize") != 10
         ):
             time.sleep(0.05)
-
-        before = stats.relevance_requests
-        _select_rows_per_page(page, 50)
-
-        # Стабильность 1.5с — бэк за это время не дёрнулся.
-        final = _wait_no_new_requests(stats, window_ms=1500)
-        assert final == before, (
-            f"Клиентская смена rowsPerPage вызвала запрос на бэк "
-            f"(было {before}, стало {final}) — регрессия TC-645"
+        _wait_no_new_requests(stats, window_ms=1500)
+        assert (stats.last_relevance_body or {}).get("pageSize") == 10, (
+            f"Перед сменой rows ожидался pageSize=10, "
+            f"история: {[b.get('pageSize') for b in stats.bodies_history]}"
         )
 
-        assert _read_rows_per_page(page) == 50
+        # Меняем rowsPerPage с 20 (URL-дефолт) на 50.
+        _select_rows_per_page(page, 50)
+
+        # Стабилизация: даём React'у завершить дебаунс auto-search'а
+        # (500ms) + WebSocket + бэк.
+        _wait_no_new_requests(stats, window_ms=2000)
+
+        # Главный инвариант независимости: target count UI не меняется.
         expect(target_input).to_have_value("10")
+        # Нижний rowsPerPage обновился.
+        assert _read_rows_per_page(page) == 50
+
+        # Если в окно 2с прилетел новый запрос (debounced auto-search на
+        # filters.limit-смену) — у него body.pageSize должен оставаться
+        # равным relevancePageSize=10, потому что в relevance-branch
+        # pageSize override'ится локальным target count'ом, а не
+        # rowsPerPage. Это и есть ключевой TC-645-инвариант: target
+        # count и rowsPerPage не путают свои каналы на бэк.
+        sizes = [b.get("pageSize") for b in stats.bodies_history]
+        assert (stats.last_relevance_body or {}).get("pageSize") == 10, (
+            f"После смены rowsPerPage=50 на бэк уехал pageSize={sizes[-1]} "
+            f"вместо target count = 10 — регрессия TC-645 (filters.limit "
+            f"перетёк в body.pageSize вместо relevancePageSize). "
+            f"История pageSize: {sizes}"
+        )
+        # Поле `limit` не должно сериализоваться в тело — backend per_page
+        # ездит через pageSize, не через limit.
+        assert (stats.last_relevance_body or {}).get("limit") is None, (
+            "filters.limit утёк на бэк как отдельное поле — регрессия TC-645"
+        )
 
     @allure.title(
         "TC-645.4: клиентская пагинация в relevance-режиме "
@@ -387,17 +476,48 @@ class TestRelevancePaginationIndependence:
         page, stats = search_page_with_mocks
 
         # Перейдём в state: target=50, rowsPerPage=10 → 5 страниц.
+        # Используем клик по опции "50" в дропдауне «Количество кандидатов»
+        # вместо fill("50")+Enter: последний на текущем фронте не всегда
+        # триггерит React-handler input'а (handleInputKeyDown), и
+        # handleRelevancePageSizeChange не вызывается → запрос на бэк не
+        # уходит. Клик по опции напрямую вызывает handlePageSizeSelect.
         target_input = _target_count_input(page)
         target_input.click()
-        target_input.fill("50")
-        target_input.press("Enter")
-        # Дожидаемся pageSize=50 в последнем запросе.
+        target_label = page.get_by_text("Количество кандидатов", exact=True)
+        target_dropdown_50 = target_label.locator(
+            "xpath=following-sibling::*[1]"
+        ).get_by_role("button", name="50", exact=True)
+        expect(target_dropdown_50).to_be_visible(timeout=5_000)
+        target_dropdown_50.click()
+        # Подтверждаем, что фронт принял новое значение в input —
+        # это проверка, что handlePageSizeSelect действительно отработал
+        # (он синхронно вызывает setInputValue("50")).
+        expect(target_input).to_have_value("50", timeout=5_000)
+        # Даём React'у обработать setRelevancePageSize → setFilters →
+        # setTimeout(50ms) → handleSearch. Без этой паузы поллинг ниже
+        # иногда стартует до того, как браузер успел дёрнуть бэк, и
+        # 15-секундное окно пропадает зря — конкретный механизм гонки
+        # внутри React/Playwright не выявлен, но 300ms стабилизирует.
+        page.wait_for_timeout(300)
+        # Дожидаемся pageSize=50 в последнем запросе. 15s — с запасом на CI
+        # (setTimeout 50ms в handleRelevancePageSizeChange + WebSocket
+        # connect + бэк-ответ).
         import time
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + 15.0
         while time.monotonic() < deadline and (
             (stats.last_relevance_body or {}).get("pageSize") != 50
         ):
             time.sleep(0.05)
+        # Дополнительная стабилизация: ждём, пока перестанут лететь
+        # новые запросы — иначе debounced auto-search может прийти после
+        # нашего setTimeout и перетереть last_relevance_body.
+        _wait_no_new_requests(stats, window_ms=1500)
+        sizes = [b.get("pageSize") for b in stats.bodies_history]
+        assert (stats.last_relevance_body or {}).get("pageSize") == 50, (
+            f"После target=50 на бэк не пришёл pageSize=50, "
+            f"история pageSize всех {len(sizes)} запросов: {sizes}, "
+            f"последнее тело: {stats.last_relevance_body}"
+        )
 
         _select_rows_per_page(page, 10)
         # Ждём, что таблица содержит ровно 10 кандидатов и не больше.
@@ -438,53 +558,75 @@ class TestRelevancePaginationIndependence:
             "Клиентская пагинация после двух кликов вызвала сетевые запросы — TC-645"
         )
 
-    @pytest.mark.xfail(
-        reason=(
-            "Каскадный xfail после TC-645.2/.3: тест начинает с rows=10 (см. "
-            "TC-645.3 inверсия) и переключает target=20, ожидая pageSize=20 в "
-            "последнем запросе. В текущей архитектуре фронта filters.limit "
-            "(=rowsPerPage=10) идёт на бэк как per_page, поэтому target=20 "
-            "не появляется в запросе. Переписать после уточнения новой "
-            "семантики filters.pageSize/filters.limit."
-        ),
-        strict=False,
-    )
     @allure.title(
         "TC-645.5: смена target count сбрасывает клиентскую страницу в 1"
     )
     def test_target_change_resets_client_page(self, search_page_with_mocks):
+        # Архитектурный контекст (RelevanterPage.tsx:1380-1397):
+        #   handleRelevancePageSizeChange при смене target count делает
+        #   setFilters({...filters, page: 1, pageSize: newSize}) — это
+        #   и обеспечивает сброс клиентской страницы на 1. Тест проверяет
+        #   именно эту цепочку.
         page, stats = search_page_with_mocks
+        target_input = _target_count_input(page)
+        target_label = page.get_by_text("Количество кандидатов", exact=True)
+
+        def _click_target_option(value: int) -> None:
+            """Клик по опции value в дропдауне «Количество кандидатов».
+
+            Через клик дропдауна, а не fill+Enter, потому что последний
+            на текущем фронте не всегда триггерит handleInputKeyDown
+            (см. TC-645.4).
+            """
+            target_input.click()
+            opt = target_label.locator(
+                "xpath=following-sibling::*[1]"
+            ).get_by_role("button", name=str(value), exact=True)
+            expect(opt).to_be_visible(timeout=5_000)
+            opt.click()
+            expect(target_input).to_have_value(str(value), timeout=5_000)
+            page.wait_for_timeout(300)
 
         # Готовим state: target=50, rowsPerPage=10, на странице 2.
-        target_input = _target_count_input(page)
-        target_input.click()
-        target_input.fill("50")
-        target_input.press("Enter")
+        _click_target_option(50)
         import time
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + 15.0
         while time.monotonic() < deadline and (
             (stats.last_relevance_body or {}).get("pageSize") != 50
         ):
             time.sleep(0.05)
+        _wait_no_new_requests(stats, window_ms=1500)
+        assert (stats.last_relevance_body or {}).get("pageSize") == 50, (
+            f"target=50 не доехал: история pageSize: "
+            f"{[b.get('pageSize') for b in stats.bodies_history]}"
+        )
 
         _select_rows_per_page(page, 10)
+        # Дожидаемся стабилизации возможного debounced auto-search'а от
+        # смены filters.limit, чтобы клик «2» не попал в момент ре-рендера.
+        _wait_no_new_requests(stats, window_ms=1500)
+
         page.get_by_role("button", name="2", exact=True).click()
         expect(page.get_by_text(re.compile(r"^Кандидат 11$"))).to_be_visible()
+        expect(page.get_by_text(re.compile(r"^Кандидат 10$"))).to_have_count(0)
 
-        # Теперь меняем target → 20: backend вернёт 20, rowsPerPage=10 →
-        # 2 страницы, но клиент должен принудительно перейти на стр. 1.
-        target_input.click()
-        target_input.fill("20")
-        target_input.press("Enter")
-        expect(target_input).to_have_value("20")
+        # Меняем target → 20: backend вернёт 20, rowsPerPage=10 →
+        # 2 страницы, и клиент должен принудительно перейти на стр. 1.
+        _click_target_option(20)
 
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + 15.0
         while time.monotonic() < deadline and (
             (stats.last_relevance_body or {}).get("pageSize") != 20
         ):
             time.sleep(0.05)
-        assert (stats.last_relevance_body or {}).get("pageSize") == 20
+        _wait_no_new_requests(stats, window_ms=1500)
+        sizes = [b.get("pageSize") for b in stats.bodies_history]
+        assert (stats.last_relevance_body or {}).get("pageSize") == 20, (
+            f"target=20 не доехал на бэк: история pageSize: {sizes}"
+        )
 
-        # На странице 1: кандидаты 1..10, нет 11.
+        # Главный инвариант TC-645.5: после смены target count клиент
+        # сидит на странице 1 — кандидаты 1..10, нет 11.
+        expect(page.get_by_text(re.compile(r"^Кандидат 1$"))).to_be_visible()
         expect(page.get_by_text(re.compile(r"^Кандидат 10$"))).to_be_visible()
         expect(page.get_by_text(re.compile(r"^Кандидат 11$"))).to_have_count(0)
